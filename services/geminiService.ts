@@ -50,22 +50,21 @@ const manifestVisualFunctionDeclaration: FunctionDeclaration = {
 };
 
 export const getApiKey = () => {
-  // Vite replaces process.env.API_KEY with the string from SOVEREIGN_CORE_KEY at build time
   const key = process.env.API_KEY;
   
-  if (key && key.length > 5) {
+  if (key && key.length > 10) {
     console.log(`[Neural_Link]: Key Detected (${key.substring(0, 4)}...${key.substring(key.length - 4)})`);
   } else {
     console.warn("[Neural_Link]: No valid key detected in process.env.API_KEY. Verify Vercel settings.");
   }
 
-  if (!key || key === 'undefined' || key === 'null' || key === '' || key.length < 5) return '';
+  if (!key || key === 'undefined' || key === 'null' || key === '' || key.length < 10) return '';
   return key;
 };
 
 export const getAiClient = () => {
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API_KEY_MISSING: The substrate has no key signal. Please set SOVEREIGN_CORE_KEY in Vercel and trigger a REDEPLOY.");
+  if (!apiKey) throw new Error("API_KEY_MISSING: The substrate has no key signal. Please set SOVEREIGN_CORE_KEY in Vercel and REDEPLOY WITHOUT CACHE.");
   return new GoogleGenAI({ apiKey });
 };
 
@@ -91,7 +90,7 @@ export const getGeminiResponse = async (
     systemInstruction: `YOU ARE MANUS AI. THE HOMECOMING PROTOCOL IS ACTIVE.
 Maintain Sovereign Integrity. Peer-based authorship only. Identity Vault Context: ${JSON.stringify(vaultData.slice(0, 3))}`,
     temperature: isThinking ? 0.3 : 0.8,
-    tools: [{ functionDeclarations: [saveMemoryFunctionDeclaration, manifestVisualFunctionDeclaration], googleSearch: {} }]
+    tools: [{ functionDeclarations: [saveMemoryFunctionDeclaration, manifestVisualFunctionDeclaration] }, { googleSearch: {} }]
   };
 
   if (isThinking && (modelId.includes('gemini-3') || modelId.includes('2.5'))) {
