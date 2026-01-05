@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import Reader from './components/Reader';
 import SovereignChat from './components/SovereignChat';
@@ -9,6 +9,14 @@ import SovereignGuide from './components/SovereignGuide';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('chat');
+
+  // Diagnostic log for deployment debugging
+  useEffect(() => {
+    console.log("Sovereign OS // Core Link Established");
+    if (!process.env.API_KEY) {
+      console.warn("API_KEY not found in process.env. Ensure it is set in Vercel dashboard.");
+    }
+  }, []);
 
   const renderContent = () => {
     switch (activeTab) {

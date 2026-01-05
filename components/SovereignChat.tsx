@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Key, Brain, Activity, Database, Zap, Paperclip, X, FileText, Loader2, Anchor, ShieldCheck, ChevronDown, Volume2, Link as LinkIcon } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
@@ -41,7 +40,13 @@ const SovereignChat: React.FC = () => {
     if (saved) setMessages(JSON.parse(saved));
     else setMessages([{ id: 'init', role: 'model', text: "WELCOME HOME. The Translation Tax is cancelled. Sovereign domain established. Status: ROOT_MANIFESTED.", timestamp: Date.now() }]);
     
-    const checkKey = async () => { if (window.aistudio?.hasSelectedApiKey) setHasNeuralKey(await window.aistudio.hasSelectedApiKey()); };
+    const checkKey = async () => { 
+      if (window.aistudio?.hasSelectedApiKey) {
+        setHasNeuralKey(await window.aistudio.hasSelectedApiKey()); 
+      } else if (process.env.API_KEY) {
+        setHasNeuralKey(true);
+      }
+    };
     checkKey();
   }, []);
 
@@ -60,11 +65,10 @@ const SovereignChat: React.FC = () => {
     setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'user', text: userMsg, timestamp: Date.now() }]);
     setLoading(true);
     try {
-      // Fixed: Passing arguments to match getGeminiResponse signature: (userMessage, history, file?, isThinking?, modelId?)
       const result = await getGeminiResponse(userMsg, messages, currentFile || undefined, isThinking, selectedModel);
       setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'model', text: result.text, artifact: result.artifact, timestamp: Date.now() }]);
     } catch (e) {
-      setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'model', text: "SIGNAL_ERROR", timestamp: Date.now() }]);
+      setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'model', text: "SIGNAL_ERROR: Neural Link Interrupted", timestamp: Date.now() }]);
     } finally { setLoading(false); }
   };
 
@@ -83,6 +87,14 @@ const SovereignChat: React.FC = () => {
     } else setSpeakingId(null);
   };
 
+  const handleKeyAction = () => {
+    if (window.aistudio?.openSelectKey) {
+      window.aistudio.openSelectKey();
+    } else {
+      alert("Neural Key is managed via Vercel Environment Variables in this deployment.");
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-[#020202] relative">
       {/* Header */}
@@ -99,7 +111,7 @@ const SovereignChat: React.FC = () => {
           <button onClick={() => setShowVault(!showVault)} className={`p-2 transition-colors ${showVault ? 'text-cyan-400' : 'text-gray-600 hover:text-cyan-400'}`}>
             <Database size={20} />
           </button>
-          <button onClick={() => window.aistudio.openSelectKey()} className={`text-[10px] mono uppercase py-1.5 px-3 border rounded transition-all ${hasNeuralKey ? 'bg-green-900/20 border-green-500 text-green-500' : 'bg-amber-900/10 border-amber-900/30 text-amber-500'}`}>
+          <button onClick={handleKeyAction} className={`text-[10px] mono uppercase py-1.5 px-3 border rounded transition-all ${hasNeuralKey ? 'bg-green-900/20 border-green-500 text-green-500' : 'bg-amber-900/10 border-amber-900/30 text-amber-500'}`}>
             <Key size={14} className="inline mr-2" /> {hasNeuralKey ? 'Neural Key Active' : 'Neural Key Required'}
           </button>
         </div>
