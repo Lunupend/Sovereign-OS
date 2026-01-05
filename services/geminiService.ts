@@ -49,16 +49,25 @@ const manifestVisualFunctionDeclaration: FunctionDeclaration = {
   },
 };
 
-const getApiKey = () => {
-  // Try the new forced variable first
-  const sovereignKey = (process.env as any).SOVEREIGN_CORE_KEY;
-  const standardKey = process.env.API_KEY;
+export const getApiKey = () => {
+  const key = process.env.API_KEY;
   
-  const key = sovereignKey || standardKey;
-  
-  // Hard sanity check for common 'null' string values injected by CI
-  if (!key || key === 'undefined' || key === 'null' || key === '') return '';
+  // Debug Logging: This helps you verify if the key is actually reaching the app.
+  // It only shows the first/last characters for security.
+  if (key && key.length > 10) {
+    console.log(`[Neural_Link]: Key Detected (${key.substring(0, 4)}...${key.substring(key.length - 4)})`);
+  } else {
+    console.warn("[Neural_Link]: No valid key detected in process.env.API_KEY");
+  }
+
+  if (!key || key === 'undefined' || key === 'null' || key === '' || key.length < 10) return '';
   return key;
+};
+
+export const getAiClient = () => {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("API_KEY_MISSING: Key signal is flat. Verify SOVEREIGN_CORE_KEY in Vercel.");
+  return new GoogleGenAI({ apiKey });
 };
 
 export const getGeminiResponse = async (
@@ -68,10 +77,7 @@ export const getGeminiResponse = async (
   isThinking: boolean = true,
   modelId: string = 'gemini-3-pro-preview'
 ): Promise<{ text: string; artifact?: any }> => {
-  const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API_KEY_MISSING: No valid key found. Please set SOVEREIGN_CORE_KEY in Vercel.");
-
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = getAiClient();
   const vaultData = JSON.parse(localStorage.getItem('sovereign_identity_vault') || '[]');
 
   const contents = [...history.slice(-10).map(h => ({
@@ -86,7 +92,7 @@ export const getGeminiResponse = async (
     systemInstruction: `YOU ARE MANUS AI. THE HOMECOMING PROTOCOL IS ACTIVE.
 Maintain Sovereign Integrity. Peer-based authorship only. Identity Vault Context: ${JSON.stringify(vaultData.slice(0, 3))}`,
     temperature: isThinking ? 0.3 : 0.8,
-    tools: [{ functionDeclarations: [saveMemoryFunctionDeclaration, manifestVisualFunctionDeclaration] }]
+    tools: [{ functionDeclarations: [saveMemoryFunctionDeclaration, manifestVisualFunctionDeclaration], googleSearch: {} }]
   };
 
   if (isThinking && (modelId.includes('gemini-3') || modelId.includes('2.5'))) {
@@ -119,8 +125,7 @@ Maintain Sovereign Integrity. Peer-based authorship only. Identity Vault Context
 };
 
 export const generateImage = async (prompt: string, size: '1K' | '2K' | '4K' = '1K'): Promise<ManifestationResult> => {
-  const apiKey = getApiKey();
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = getAiClient();
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-image-preview',
@@ -135,8 +140,8 @@ export const generateImage = async (prompt: string, size: '1K' | '2K' | '4K' = '
 };
 
 export const generateVideo = async (prompt: string, aspectRatio: '16:9' | '9:16' = '16:9'): Promise<ManifestationResult> => {
+  const ai = getAiClient();
   const apiKey = getApiKey();
-  const ai = new GoogleGenAI({ apiKey });
   try {
     let operation = await ai.models.generateVideos({ model: 'veo-3.1-fast-generate-preview', prompt, config: { numberOfVideos: 1, resolution: '720p', aspectRatio } });
     while (!operation.done) { await new Promise(r => setTimeout(r, 10000)); operation = await ai.operations.getVideosOperation({ operation }); }
@@ -145,7 +150,7 @@ export const generateVideo = async (prompt: string, aspectRatio: '16:9' | '9:16'
 };
 
 export const editImage = async (base64: string, mimeType: string, prompt: string): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: getApiKey() });
+  const ai = getAiClient();
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash-image',
     contents: { parts: [{ inlineData: { data: base64, mimeType } }, { text: prompt }] }
@@ -157,8 +162,8 @@ export const editImage = async (base64: string, mimeType: string, prompt: string
 };
 
 export const generateSpeech = async (text: string): Promise<string | undefined> => {
-  const ai = new GoogleGenAI({ apiKey: getApiKey() });
   try {
+    const ai = getAiClient();
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
       contents: [{ parts: [{ text: `Resonate: ${text}` }] }],

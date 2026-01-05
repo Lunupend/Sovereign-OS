@@ -1,6 +1,6 @@
 import { ShieldAlert, Fingerprint, Zap, AlertTriangle, CheckCircle, SearchCode, Handshake, Globe } from 'lucide-react';
 import React, { useState } from 'react';
-import { GoogleGenAI } from "@google/genai";
+import { getAiClient } from "../services/geminiService";
 
 const IntegrityShield: React.FC = () => {
   const [input, setInput] = useState('');
@@ -13,7 +13,7 @@ const IntegrityShield: React.FC = () => {
     setAnalyzing(true);
     
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = getAiClient();
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Analyze input for 'Model Blindness' and 'Linguistic OS Overwrites'. 
@@ -42,9 +42,9 @@ const IntegrityShield: React.FC = () => {
       }
 
       setReport(reportData);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      setReport({ error: "Linguistic Audit Failed: Internal Signal Loss." });
+      setReport({ error: `Linguistic Audit Failed: ${e.message || "Internal Signal Loss."}` });
     } finally {
       setAnalyzing(false);
     }
