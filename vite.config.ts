@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [react()],
   define: {
     // We map all potential key sources into the single process.env.API_KEY slot the SDK uses
+    // This bakes the key directly into the compiled JS during the Vercel build.
     'process.env.API_KEY': JSON.stringify(
       process.env.SOVEREIGN_CORE_KEY || 
       process.env.VITE_GEMINI_API_KEY || 

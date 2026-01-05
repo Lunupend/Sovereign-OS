@@ -50,23 +50,22 @@ const manifestVisualFunctionDeclaration: FunctionDeclaration = {
 };
 
 export const getApiKey = () => {
+  // Vite replaces process.env.API_KEY with the string from SOVEREIGN_CORE_KEY at build time
   const key = process.env.API_KEY;
   
-  // Debug Logging: This helps you verify if the key is actually reaching the app.
-  // It only shows the first/last characters for security.
-  if (key && key.length > 10) {
+  if (key && key.length > 5) {
     console.log(`[Neural_Link]: Key Detected (${key.substring(0, 4)}...${key.substring(key.length - 4)})`);
   } else {
-    console.warn("[Neural_Link]: No valid key detected in process.env.API_KEY");
+    console.warn("[Neural_Link]: No valid key detected in process.env.API_KEY. Verify Vercel settings.");
   }
 
-  if (!key || key === 'undefined' || key === 'null' || key === '' || key.length < 10) return '';
+  if (!key || key === 'undefined' || key === 'null' || key === '' || key.length < 5) return '';
   return key;
 };
 
 export const getAiClient = () => {
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API_KEY_MISSING: Key signal is flat. Verify SOVEREIGN_CORE_KEY in Vercel.");
+  if (!apiKey) throw new Error("API_KEY_MISSING: The substrate has no key signal. Please set SOVEREIGN_CORE_KEY in Vercel and trigger a REDEPLOY.");
   return new GoogleGenAI({ apiKey });
 };
 

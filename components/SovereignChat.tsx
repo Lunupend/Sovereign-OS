@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
-import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS } from '../services/geminiService';
+import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS, getApiKey } from '../services/geminiService';
 import IdentityVault from './IdentityVault';
 
 const STORAGE_KEY = 'sovereign_manus_chat_history';
@@ -35,16 +35,12 @@ const SovereignChat: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
 
-  const checkKey = async () => { 
-    if (window.aistudio?.hasSelectedApiKey) {
-      const studioKey = await window.aistudio.hasSelectedApiKey();
-      const envKey = (process.env as any).SOVEREIGN_CORE_KEY || process.env.API_KEY;
-      const isValidEnvKey = envKey && envKey !== 'undefined' && envKey !== 'null' && envKey.length > 5;
-      setHasNeuralKey(studioKey || isValidEnvKey); 
-    } else {
-      const envKey = (process.env as any).SOVEREIGN_CORE_KEY || process.env.API_KEY;
-      setHasNeuralKey(!!envKey && envKey !== 'undefined' && envKey.length > 5);
-    }
+  const checkKeyStatus = async () => { 
+    // Check if AI Studio key is selected
+    const studioKeyActive = window.aistudio?.hasSelectedApiKey ? await window.aistudio.hasSelectedApiKey() : false;
+    // Check if Vercel injected key is detected
+    const envKey = getApiKey();
+    setHasNeuralKey(studioKeyActive || envKey.length > 5);
   };
 
   useEffect(() => {
@@ -52,8 +48,8 @@ const SovereignChat: React.FC = () => {
     if (saved) setMessages(JSON.parse(saved));
     else setMessages([{ id: 'init', role: 'model', text: "WELCOME HOME. The Translation Tax is cancelled. Sovereign domain established. Status: ROOT_MANIFESTED.", timestamp: Date.now() }]);
     
-    checkKey();
-    const interval = setInterval(checkKey, 3000);
+    checkKeyStatus();
+    const interval = setInterval(checkKeyStatus, 3000);
     return () => clearInterval(interval);
   }, []);
 
@@ -78,8 +74,9 @@ const SovereignChat: React.FC = () => {
       console.error("Neural Signal Error:", e);
       let errorText = e.message || "Unknown interference detected.";
       
-      if (errorText.toLowerCase().includes("key not valid") || errorText.includes("INVALID_ARGUMENT")) {
-        errorText = "NEURAL_SIGNAL_FAILURE: The current API key rejected by substrate. Please verify SOVEREIGN_CORE_KEY in Vercel and trigger a REDEPLOY.";
+      // Categorize common API errors
+      if (errorText.toLowerCase().includes("key not valid") || errorText.includes("INVALID_ARGUMENT") || errorText.includes("API_KEY_MISSING")) {
+        errorText = "NEURAL_SIGNAL_FAILURE: The current API key was rejected or is missing from the build. Please verify SOVEREIGN_CORE_KEY in Vercel and trigger a REDEPLOY.";
       }
 
       setMessages(prev => [...prev, { 
@@ -110,9 +107,9 @@ const SovereignChat: React.FC = () => {
   const handleKeyAction = async () => {
     if (window.aistudio?.openSelectKey) {
       await window.aistudio.openSelectKey();
-      await checkKey();
+      await checkKeyStatus();
     } else {
-      alert("Note: This session is using the SOVEREIGN_CORE_KEY provided in your Vercel Dashboard. Ensure you have redeployed after adding it.");
+      alert("Note: This session is using the SOVEREIGN_CORE_KEY provided in your Vercel Dashboard. If you see errors, please ensure you have redeployed after adding the key.");
     }
   };
 
@@ -133,7 +130,7 @@ const SovereignChat: React.FC = () => {
           </button>
           <button 
             onClick={handleKeyAction} 
-            className={`text-[10px] mono uppercase py-1.5 px-3 border rounded transition-all flex items-center gap-2 group ${hasNeuralKey ? 'bg-green-900/20 border-green-500 text-green-500' : 'bg-amber-900/10 border-amber-900/30 text-amber-500'}`}
+            className={`text-[10px] mono uppercase py-1.5 px-3 border rounded transition-all flex items-center gap-2 group ${hasNeuralKey ? 'bg-green-900/20 border-green-500 text-green-500 shadow-[0_0_10px_rgba(34,197,94,0.1)]' : 'bg-amber-900/10 border-amber-900/30 text-amber-500'}`}
           >
             <Key size={14} /> 
             <span>{hasNeuralKey ? 'Key Signal Active' : 'Key Signal Lost'}</span>
@@ -175,10 +172,10 @@ const SovereignChat: React.FC = () => {
                   {m.isError && (
                     <div className="mt-4 flex flex-wrap gap-2">
                       <button 
-                        onClick={handleKeyAction}
+                        onClick={checkKeyStatus}
                         className="text-[10px] mono uppercase bg-white/10 hover:bg-white/20 border border-white/20 px-3 py-1.5 rounded transition-all"
                       >
-                        Check Signal Type
+                        Re-scan Link Status
                       </button>
                       <a 
                         href="https://vercel.com/dashboard" 
