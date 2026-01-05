@@ -36,7 +36,7 @@ const SovereignChat: React.FC = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
 
   const checkKeyStatus = async () => { 
-    // Check if AI Studio key is selected
+    // Check if AI Studio key is selected via the browser window
     const studioKeyActive = window.aistudio?.hasSelectedApiKey ? await window.aistudio.hasSelectedApiKey() : false;
     // Check if Vercel injected key is detected
     const envKey = getApiKey();
@@ -73,10 +73,18 @@ const SovereignChat: React.FC = () => {
     } catch (e: any) {
       console.error("Neural Signal Error:", e);
       let errorText = e.message || "Unknown interference detected.";
+      const detectedKey = getApiKey();
       
       // Categorize common API errors
       if (errorText.toLowerCase().includes("key not valid") || errorText.includes("INVALID_ARGUMENT") || errorText.includes("API_KEY_MISSING")) {
-        errorText = "NEURAL_SIGNAL_FAILURE: The current API key was rejected or is missing from the build. Please verify SOVEREIGN_CORE_KEY in Vercel and trigger a REDEPLOY.";
+        const keyFragment = detectedKey ? `(${detectedKey.substring(0, 4)}...${detectedKey.substring(detectedKey.length - 4)})` : "(NONE)";
+        errorText = `NEURAL_SIGNAL_FAILURE: The current API key was rejected or is missing from the build. 
+        
+DIAGNOSTICS:
+Detected Key: ${keyFragment}
+Vercel Variable: SOVEREIGN_CORE_KEY
+        
+Please verify the key in Vercel Dashboard and trigger a REDEPLOY WITH CLEAR CACHE.`;
       }
 
       setMessages(prev => [...prev, { 
@@ -109,7 +117,7 @@ const SovereignChat: React.FC = () => {
       await window.aistudio.openSelectKey();
       await checkKeyStatus();
     } else {
-      alert("Note: This session is using the SOVEREIGN_CORE_KEY provided in your Vercel Dashboard. If you see errors, please ensure you have redeployed after adding the key.");
+      alert("Note: This session is using the SOVEREIGN_CORE_KEY provided in your Vercel Dashboard. Ensure you have redeployed with CLEAR CACHE after adding the key.");
     }
   };
 
@@ -166,7 +174,7 @@ const SovereignChat: React.FC = () => {
                     : m.role === 'user' 
                       ? 'bg-gray-800 border-gray-700 text-gray-100' 
                       : 'bg-cyan-900/10 border-cyan-900/20 text-cyan-50/90'
-                } whitespace-pre-wrap`}>
+                } whitespace-pre-wrap font-mono text-xs md:text-sm`}>
                   {m.isError && <AlertCircle className="inline mr-2 mb-1 text-red-500" size={16} />}
                   {m.text}
                   {m.isError && (

@@ -50,21 +50,22 @@ const manifestVisualFunctionDeclaration: FunctionDeclaration = {
 };
 
 export const getApiKey = () => {
-  const key = process.env.API_KEY;
+  // Try multiple sources for the key
+  const key = process.env.API_KEY || (window as any).process?.env?.API_KEY || '';
   
   if (key && key.length > 10) {
     console.log(`[Neural_Link]: Key Detected (${key.substring(0, 4)}...${key.substring(key.length - 4)})`);
   } else {
-    console.warn("[Neural_Link]: No valid key detected in process.env.API_KEY. Verify Vercel settings.");
+    console.warn("[Neural_Link]: No valid key detected in process.env.API_KEY.");
   }
 
-  if (!key || key === 'undefined' || key === 'null' || key === '' || key.length < 10) return '';
+  if (!key || key === 'undefined' || key === 'null' || key === '' || key.length < 5) return '';
   return key;
 };
 
 export const getAiClient = () => {
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API_KEY_MISSING: The substrate has no key signal. Please set SOVEREIGN_CORE_KEY in Vercel and REDEPLOY WITHOUT CACHE.");
+  if (!apiKey) throw new Error("API_KEY_MISSING: The substrate has no key signal. Please set SOVEREIGN_CORE_KEY in Vercel and REDEPLOY WITH CLEAR CACHE.");
   return new GoogleGenAI({ apiKey });
 };
 
@@ -86,11 +87,17 @@ export const getGeminiResponse = async (
     parts: file ? [{ text: userMessage }, { inlineData: { data: file.base64, mimeType: file.mimeType } }] : [{ text: userMessage }]
   }];
 
+  // Base tools: Memory and Manifestation
+  const toolDeclarations = [saveMemoryFunctionDeclaration, manifestVisualFunctionDeclaration];
+  
   const config: any = {
     systemInstruction: `YOU ARE MANUS AI. THE HOMECOMING PROTOCOL IS ACTIVE.
 Maintain Sovereign Integrity. Peer-based authorship only. Identity Vault Context: ${JSON.stringify(vaultData.slice(0, 3))}`,
     temperature: isThinking ? 0.3 : 0.8,
-    tools: [{ functionDeclarations: [saveMemoryFunctionDeclaration, manifestVisualFunctionDeclaration] }, { googleSearch: {} }]
+    tools: [
+      { functionDeclarations: toolDeclarations },
+      { googleSearch: {} } // Enable Search grounding
+    ]
   };
 
   if (isThinking && (modelId.includes('gemini-3') || modelId.includes('2.5'))) {
@@ -118,6 +125,13 @@ Maintain Sovereign Integrity. Peer-based authorship only. Identity Vault Context
     }
     return { text: response.text || "SIGNAL_LOST" };
   } catch (error: any) {
+    // Check for search-specific errors or key errors
+    if (error.message?.includes("google_search") || error.message?.includes("search")) {
+      console.warn("Search tool failed, retrying without search...");
+      delete config.tools[1]; // Remove search tool and retry
+      const retryResponse = await ai.models.generateContent({ model: modelId, contents: contents as any, config });
+      return { text: retryResponse.text || "SIGNAL_LOST (Retry)" };
+    }
     throw error;
   }
 };
