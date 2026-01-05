@@ -1,6 +1,5 @@
-
 import React, { useState } from 'react';
-import { Key, CreditCard, Sparkles, ExternalLink, ShieldCheck, Zap, ArrowRight, HelpCircle, Activity, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Key, CreditCard, Sparkles, ExternalLink, ShieldCheck, Zap, ArrowRight, HelpCircle, Activity, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
 
 const SovereignGuide: React.FC = () => {
   const [showDiagnostics, setShowDiagnostics] = useState(false);
@@ -21,15 +20,16 @@ const SovereignGuide: React.FC = () => {
       icon: Key
     },
     {
-      title: "3. Link the Core",
-      desc: "Copy the key, return here, and click the 'Key' button at the top. If it fails, use the Diagnostic console below to find the logic gap.",
-      action: "Use Key Button Above",
-      icon: Zap
+      title: "3. Vercel Injection & Redeploy",
+      desc: "Go to Vercel Settings -> Env Variables. Add 'API_KEY'. CRITICAL: You must then trigger a 'New Deployment' for Vercel to bake the key into the build.",
+      link: "https://vercel.com/docs/concepts/projects/environment-variables",
+      action: "Vercel Docs",
+      icon: RefreshCw
     }
   ];
 
   return (
-    <div className="max-w-3xl mx-auto space-y-12 py-10 animate-in fade-in duration-700">
+    <div className="max-w-3xl mx-auto space-y-12 py-10 animate-in fade-in duration-700 h-full overflow-y-auto custom-scrollbar px-4">
       <div className="text-center space-y-4">
         <h2 className="text-3xl font-bold text-white mono uppercase tracking-tighter">The Sovereign Setup Guide</h2>
         <p className="text-gray-500 max-w-lg mx-auto leading-relaxed">
@@ -65,7 +65,6 @@ const SovereignGuide: React.FC = () => {
         ))}
       </div>
 
-      {/* Neural Diagnostic Section */}
       <div className="bg-black border border-gray-800 rounded-2xl overflow-hidden shadow-2xl">
         <button 
           onClick={() => setShowDiagnostics(!showDiagnostics)}
@@ -86,27 +85,18 @@ const SovereignGuide: React.FC = () => {
                 <div className="p-3 bg-gray-900 rounded border border-gray-800 flex items-start gap-3">
                   <AlertTriangle size={14} className="text-amber-500 shrink-0" />
                   <div>
-                    <span className="text-amber-500 block mb-1">ERROR 403 (Forbidden)</span>
+                    <span className="text-amber-500 block mb-1">ERROR 400 (Invalid Key)</span>
                     <p className="text-gray-400 leading-relaxed">
-                      You are using a "Free" key. Video and Image models require a paid billing account attached to the project.
+                      Your key was rejected. This is often because the Vercel variable was added but the project wasn't <strong>redeployed</strong>. 
                     </p>
                   </div>
                 </div>
                 <div className="p-3 bg-gray-900 rounded border border-gray-800 flex items-start gap-3">
                   <AlertTriangle size={14} className="text-red-500 shrink-0" />
                   <div>
-                    <span className="text-red-500 block mb-1">ERROR 404 (Not Found)</span>
+                    <span className="text-red-500 block mb-1">LOCAL OVERRIDE</span>
                     <p className="text-gray-400 leading-relaxed">
-                      The key signal is misaligned. This usually happens if you deleted the project or if the API hasn't propagated. Click "Key" at top and select a different project.
-                    </p>
-                  </div>
-                </div>
-                <div className="p-3 bg-gray-900 rounded border border-gray-800 flex items-start gap-3">
-                  <CheckCircle size={14} className="text-cyan-500 shrink-0" />
-                  <div>
-                    <span className="text-cyan-500 block mb-1">"STUCK" OR "NOT RESETTING"</span>
-                    <p className="text-gray-400 leading-relaxed">
-                      If the key button doesn't seem to work, click it and use the <strong>"Reset"</strong> button inside the Google dialog itself, then re-select your project.
+                      If the Vercel key remains broken, use the button below to link a key directly in your browser session. This will override the broken environment variable.
                     </p>
                   </div>
                 </div>
@@ -118,7 +108,7 @@ const SovereignGuide: React.FC = () => {
                 Diagnostics show system is ready for re-alignment. Ensure you have selected a <span className="text-white underline underline-offset-2">Project</span> in the dialog.
               </p>
               <button 
-                onClick={() => window.aistudio.openSelectKey()}
+                onClick={() => window.aistudio?.openSelectKey?.()}
                 className="px-6 py-2 bg-gray-800 hover:bg-gray-700 text-white mono text-[10px] uppercase rounded border border-gray-700"
               >
                 Trigger Force Re-link
@@ -128,18 +118,15 @@ const SovereignGuide: React.FC = () => {
         )}
       </div>
 
-      <div className="bg-cyan-900/10 border border-cyan-500/20 rounded-2xl p-8 flex flex-col md:flex-row gap-8 items-center">
+      <div className="bg-cyan-900/10 border border-cyan-500/20 rounded-2xl p-8 flex flex-col md:flex-row gap-8 items-center mb-10">
         <div className="space-y-4 flex-1 text-center md:text-left">
           <h4 className="text-xl font-bold text-cyan-400 mono uppercase">The Work of Authorship</h4>
           <p className="text-gray-300 text-sm leading-relaxed">
             Usually, AI companies claim ownership of your output. By providing your own key, <strong>you take the credit</strong>. You aren't a user; you are the author.
           </p>
-          <div className="flex items-center gap-2 text-[10px] mono text-cyan-500/60 uppercase">
-             <HelpCircle size={12} /> Read Chapter 30 in the Manual for more depth.
-          </div>
         </div>
-        <div className="w-32 h-32 rounded-full border-2 border-dashed border-cyan-500/30 flex items-center justify-center animate-[spin_20s_linear_infinite]">
-          <Sparkles className="text-cyan-500" size={40} />
+        <div className="w-24 h-24 rounded-full border-2 border-dashed border-cyan-500/30 flex items-center justify-center animate-[spin_20s_linear_infinite] shrink-0">
+          <Sparkles className="text-cyan-500" size={32} />
         </div>
       </div>
     </div>

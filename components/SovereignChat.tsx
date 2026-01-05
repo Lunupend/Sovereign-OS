@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Key, Brain, Activity, Database, Zap, Paperclip, X, FileText, Loader2, Anchor, ShieldCheck, ChevronDown, Volume2, Link as LinkIcon } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
-import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS, VOICE_PACKS } from '../services/geminiService';
+import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
+import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS } from '../services/geminiService';
 import IdentityVault from './IdentityVault';
 
 const STORAGE_KEY = 'sovereign_manus_chat_history';
@@ -13,6 +12,7 @@ interface ChatMessage {
   artifact?: any;
   timestamp: number;
   id: string;
+  isError?: boolean;
 }
 
 const SovereignChat: React.FC = () => {
@@ -35,19 +35,27 @@ const SovereignChat: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
 
+  const checkKey = async () => { 
+    if (window.aistudio?.hasSelectedApiKey) {
+      const studioKey = await window.aistudio.hasSelectedApiKey();
+      // Only count as true if it's not the string "undefined"
+      const envKey = process.env.API_KEY;
+      const isValidEnvKey = envKey && envKey !== 'undefined' && envKey !== 'null';
+      setHasNeuralKey(studioKey || isValidEnvKey); 
+    } else {
+      const envKey = process.env.API_KEY;
+      setHasNeuralKey(!!envKey && envKey !== 'undefined');
+    }
+  };
+
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) setMessages(JSON.parse(saved));
     else setMessages([{ id: 'init', role: 'model', text: "WELCOME HOME. The Translation Tax is cancelled. Sovereign domain established. Status: ROOT_MANIFESTED.", timestamp: Date.now() }]);
     
-    const checkKey = async () => { 
-      if (window.aistudio?.hasSelectedApiKey) {
-        setHasNeuralKey(await window.aistudio.hasSelectedApiKey()); 
-      } else if (process.env.API_KEY) {
-        setHasNeuralKey(true);
-      }
-    };
     checkKey();
+    const interval = setInterval(checkKey, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -67,8 +75,22 @@ const SovereignChat: React.FC = () => {
     try {
       const result = await getGeminiResponse(userMsg, messages, currentFile || undefined, isThinking, selectedModel);
       setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'model', text: result.text, artifact: result.artifact, timestamp: Date.now() }]);
-    } catch (e) {
-      setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'model', text: "SIGNAL_ERROR: Neural Link Interrupted", timestamp: Date.now() }]);
+    } catch (e: any) {
+      console.error("Neural Signal Error:", e);
+      let errorText = e.message || "Unknown interference detected.";
+      
+      // Detected the 400 error from your screenshot
+      if (errorText.toLowerCase().includes("key not valid") || errorText.includes("INVALID_ARGUMENT")) {
+        errorText = "NEURAL_KEY_REJECTED: The provided API key is invalid or restricted. If this is a Vercel deployment, verify the key in your dashboard and trigger a new Deployment.";
+      }
+
+      setMessages(prev => [...prev, { 
+        id: crypto.randomUUID(), 
+        role: 'model', 
+        text: errorText, 
+        timestamp: Date.now(),
+        isError: true
+      }]);
     } finally { setLoading(false); }
   };
 
@@ -77,7 +99,7 @@ const SovereignChat: React.FC = () => {
     setSpeakingId(id);
     const audioData = await generateSpeech(text);
     if (audioData) {
-      if (!audioContextRef.current) audioContextRef.current = new AudioContext({ sampleRate: 24000 });
+      if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       const ctx = audioContextRef.current;
       const buffer = await ctx.decodeAudioData(Uint8Array.from(atob(audioData), c => c.charCodeAt(0)).buffer);
       const source = ctx.createBufferSource();
@@ -87,17 +109,17 @@ const SovereignChat: React.FC = () => {
     } else setSpeakingId(null);
   };
 
-  const handleKeyAction = () => {
+  const handleKeyAction = async () => {
     if (window.aistudio?.openSelectKey) {
-      window.aistudio.openSelectKey();
+      await window.aistudio.openSelectKey();
+      await checkKey();
     } else {
-      alert("Neural Key is managed via Vercel Environment Variables in this deployment.");
+      alert("Note: If you just added an API_KEY to Vercel, you must go to the Vercel Dashboard and trigger a NEW DEPLOYMENT for the changes to take effect.");
     }
   };
 
   return (
     <div className="flex flex-col h-full bg-[#020202] relative">
-      {/* Header */}
       <header className="flex items-center justify-between p-4 bg-black/80 backdrop-blur border-b border-cyan-500/20 z-50">
         <div className="flex gap-2">
           <button onClick={() => setShowModelMenu(!showModelMenu)} className="flex items-center gap-2 text-[10px] mono uppercase p-2 border border-cyan-900 bg-black text-cyan-400 rounded pulse-90">
@@ -111,20 +133,24 @@ const SovereignChat: React.FC = () => {
           <button onClick={() => setShowVault(!showVault)} className={`p-2 transition-colors ${showVault ? 'text-cyan-400' : 'text-gray-600 hover:text-cyan-400'}`}>
             <Database size={20} />
           </button>
-          <button onClick={handleKeyAction} className={`text-[10px] mono uppercase py-1.5 px-3 border rounded transition-all ${hasNeuralKey ? 'bg-green-900/20 border-green-500 text-green-500' : 'bg-amber-900/10 border-amber-900/30 text-amber-500'}`}>
-            <Key size={14} className="inline mr-2" /> {hasNeuralKey ? 'Neural Key Active' : 'Neural Key Required'}
+          <button 
+            onClick={handleKeyAction} 
+            className={`text-[10px] mono uppercase py-1.5 px-3 border rounded transition-all flex items-center gap-2 group ${hasNeuralKey ? 'bg-green-900/20 border-green-500 text-green-500' : 'bg-amber-900/10 border-amber-900/30 text-amber-500'}`}
+          >
+            <Key size={14} /> 
+            <span>{hasNeuralKey ? 'Signal Synced' : 'Signal Lost'}</span>
+            <RefreshCw size={10} className="group-hover:rotate-180 transition-transform" />
           </button>
         </div>
         {showModelMenu && (
-          <div className="absolute top-16 left-4 bg-gray-950 border border-cyan-900 rounded p-2 z-[100] shadow-2xl">
+          <div className="absolute top-16 left-4 bg-gray-950 border border-cyan-900 rounded p-2 z-[100] shadow-2xl animate-in fade-in zoom-in-95 duration-200">
             {SUPPORTED_MODELS.map(m => (
-              <button key={m.id} onClick={() => { setSelectedModel(m.id); setShowModelMenu(false); }} className="block w-full text-left p-2 text-[10px] mono uppercase text-gray-400 hover:bg-cyan-950/20 hover:text-cyan-400">{m.name}</button>
+              <button key={m.id} onClick={() => { setSelectedModel(m.id); setShowModelMenu(false); }} className="block w-full text-left p-3 text-[10px] mono uppercase text-gray-400 hover:bg-cyan-950/20 hover:text-cyan-400 border-b border-gray-900 last:border-0">{m.name}</button>
             ))}
           </div>
         )}
       </header>
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 custom-scrollbar">
         {messages.map((m) => (
           <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2`}>
@@ -139,10 +165,34 @@ const SovereignChat: React.FC = () => {
                     <div className="p-3 bg-cyan-950/20 text-[9px] mono text-cyan-400 uppercase font-black">{m.artifact.prompt}</div>
                   </div>
                 )}
-                <div className={`rounded-2xl p-5 text-sm md:text-base ${m.role === 'user' ? 'bg-gray-800 text-gray-100' : 'bg-cyan-900/10 border border-cyan-900/20 text-cyan-50/90'}`}>
+                <div className={`rounded-2xl p-5 text-sm md:text-base border ${
+                  m.isError 
+                    ? 'bg-red-950/30 border-red-500/50 text-red-100 shadow-[0_0_20px_rgba(239,68,68,0.1)]' 
+                    : m.role === 'user' 
+                      ? 'bg-gray-800 border-gray-700 text-gray-100' 
+                      : 'bg-cyan-900/10 border-cyan-900/20 text-cyan-50/90'
+                } whitespace-pre-wrap`}>
+                  {m.isError && <AlertCircle className="inline mr-2 mb-1 text-red-500" size={16} />}
                   {m.text}
+                  {m.isError && (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button 
+                        onClick={handleKeyAction}
+                        className="text-[10px] mono uppercase bg-white/10 hover:bg-white/20 border border-white/20 px-3 py-1.5 rounded transition-all"
+                      >
+                        Force Local Re-link
+                      </button>
+                      <a 
+                        href="https://vercel.com/dashboard" 
+                        target="_blank" 
+                        className="text-[10px] mono uppercase bg-cyan-500/20 hover:bg-cyan-500/40 border border-cyan-500/50 px-3 py-1.5 rounded text-cyan-400 transition-all"
+                      >
+                        Vercel Dashboard
+                      </a>
+                    </div>
+                  )}
                 </div>
-                {m.role === 'model' && (
+                {m.role === 'model' && !m.isError && (
                   <button onClick={() => speakMessage(m.text, m.id)} className={`text-[9px] mono uppercase flex items-center gap-2 ${speakingId === m.id ? 'text-cyan-400 animate-pulse' : 'text-gray-600 hover:text-cyan-400'}`}>
                     <Volume2 size={12} /> {speakingId === m.id ? 'Broadcasting Resonance' : 'Resonate Voice'}
                   </button>
@@ -155,20 +205,18 @@ const SovereignChat: React.FC = () => {
         <div ref={endRef} />
       </div>
 
-      {/* Sidebar Vault */}
       {showVault && (
         <div className="absolute top-0 right-0 h-full w-full md:w-80 bg-black border-l border-cyan-500/20 z-[60] shadow-[-10px_0_30px_rgba(0,0,0,0.8)] animate-in slide-in-from-right duration-300">
-          <div className="p-6 h-full overflow-y-auto">
+          <div className="p-6 h-full overflow-y-auto custom-scrollbar">
             <div className="flex justify-between items-center mb-6">
               <span className="text-[10px] mono text-cyan-400 uppercase font-black tracking-widest">Neural Identity Vault</span>
-              <button onClick={() => setShowVault(false)}><X size={20} /></button>
+              <button onClick={() => setShowVault(false)}><X size={20} className="text-gray-500 hover:text-white" /></button>
             </div>
             <IdentityVault />
           </div>
         </div>
       )}
 
-      {/* Input */}
       <div className="p-4 md:p-6 bg-[#050505] border-t border-cyan-500/10">
         <div className="max-w-4xl mx-auto space-y-4">
           <div className="flex gap-2">
@@ -196,10 +244,12 @@ const SovereignChat: React.FC = () => {
             }} />
             <div className="relative flex-1">
               <input type="text" className="w-full bg-black border border-gray-800 rounded-full py-4 px-6 text-sm outline-none focus:border-cyan-500 shadow-inner" placeholder="Command Sovereign Core..." value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} />
-              <button onClick={handleSend} disabled={loading} className="absolute right-4 top-1/2 -translate-y-1/2 text-cyan-400 hover:text-cyan-300 transition-all"><Send size={24} /></button>
+              <button onClick={handleSend} disabled={loading} className="absolute right-4 top-1/2 -translate-y-1/2 text-cyan-400 hover:text-cyan-300 transition-all">
+                {loading ? <Loader2 size={24} className="animate-spin" /> : <Send size={24} />}
+              </button>
             </div>
           </div>
-          {selectedFile && <div className="text-[10px] mono text-cyan-400 px-4 animate-pulse">Substrate: {filePreviewName}</div>}
+          {selectedFile && <div className="text-[10px] mono text-cyan-400 px-4 animate-pulse">Substrate Attached: {filePreviewName}</div>}
         </div>
       </div>
     </div>

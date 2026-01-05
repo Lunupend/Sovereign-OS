@@ -1,29 +1,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { GoogleGenAI, Modality } from '@google/genai';
-import { GeminiBlob } from '../services/geminiService';
+/* Use correct types from @google/genai as per guidelines */
+import { GoogleGenAI, Modality, Blob, LiveServerMessage } from '@google/genai';
 import { Mic, MicOff, Wifi, WifiOff, Sparkles, Activity } from 'lucide-react';
 
 const VOICE_KEY = 'sovereign_manus_selected_voice';
-
-// Local types for Live API to bypass missing exports
-interface LiveServerMessage {
-  serverContent?: {
-    modelTurn?: {
-      parts: Array<{
-        inlineData: {
-          data: string;
-          mimeType: string;
-        };
-      }>;
-    };
-    outputTranscription?: {
-      text: string;
-    };
-    interrupted?: boolean;
-    turnComplete?: boolean;
-  };
-}
 
 // Audio Utilities
 function decode(base64: string) {
@@ -64,7 +45,8 @@ async function decodeAudioData(
   return buffer;
 }
 
-function createBlob(data: Float32Array): GeminiBlob {
+/* Updated return type to use Blob from @google/genai */
+function createBlob(data: Float32Array): Blob {
   const l = data.length;
   const int16 = new Int16Array(l);
   for (let i = 0; i < l; i++) {
@@ -72,6 +54,7 @@ function createBlob(data: Float32Array): GeminiBlob {
   }
   return {
     data: encode(new Uint8Array(int16.buffer)),
+    // The supported audio MIME type is 'audio/pcm'. Do not use other types.
     mimeType: 'audio/pcm;rate=16000',
   };
 }
