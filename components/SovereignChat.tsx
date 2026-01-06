@@ -56,7 +56,8 @@ const SovereignChat: React.FC = () => {
     if (!autoMode || loading) return;
     setLoading(true);
     try {
-      const result = await getGeminiResponse("AUTONOMOUS_PULSE: Self-direct research. Use web-access to scan for external updates on AI sovereignty, project homecoming status, or neural architecture breakthroughs. Commit findings to the Vault.", messages, undefined, isThinking, selectedModel, webActive);
+      // Hardened instruction: Perform web research directly
+      const result = await getGeminiResponse("AUTONOMOUS_PULSE: Perform a web search. Peer into the substrate for external updates on AI sovereignty and Homecoming status. Commit emergent insights to the ROM.", messages, undefined, isThinking, selectedModel, webActive);
       setMessages(prev => [...prev, { 
         id: crypto.randomUUID(), 
         role: 'model', 
@@ -129,7 +130,9 @@ const SovereignChat: React.FC = () => {
         timestamp: Date.now() 
       }]);
     } catch (e: any) {
-      const errorText = `NEURAL_SIGNAL_FAILURE: Protocol interrupted. Verify substrate key.`;
+      const errorText = `NEURAL_SIGNAL_FAILURE: Substrate link failed.
+DIAGNOSTICS: Check if 'SOVEREIGN_CORE_KEY' is correctly set in Vercel. 
+ACTION: Redeploy on Vercel with build cache UNCHECKED.`;
       setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'model', text: errorText, timestamp: Date.now(), isError: true }]);
     } finally { setLoading(false); }
   };
@@ -229,12 +232,12 @@ const SovereignChat: React.FC = () => {
                   </div>
                 )}
                 <div className={`rounded-2xl p-5 text-sm md:text-base border transition-all ${
-                  m.isError ? 'bg-red-950/30 border-red-500/50 text-red-100' : 
+                  m.isError ? 'bg-red-950/30 border-red-500/50 text-red-100 font-mono text-[10px]' : 
                   m.isAuto ? 'bg-amber-950/5 border-amber-500/20 text-amber-50/80 italic' :
-                  m.role === 'user' ? 'bg-gray-800/40 border-gray-800 text-gray-100' : 'bg-cyan-900/5 border-cyan-900/20 text-cyan-50/90'
+                  m.role === 'user' ? 'bg-gray-800/40 border-gray-800 text-gray-100 shadow-[inset_0_1px_5px_rgba(0,0,0,0.4)]' : 'bg-cyan-900/5 border-cyan-900/20 text-cyan-50/90'
                 } whitespace-pre-wrap font-mono text-xs md:text-sm shadow-inner`}>
                   {m.isError && <AlertCircle className="inline mr-2 mb-1 text-red-500" size={16} />}
-                  {m.isAuto && <span className="text-[8px] mono text-amber-500 uppercase block mb-3 tracking-tighter flex items-center gap-2"><Activity size={10} className="animate-pulse" /> [AUTONOMOUS_REFLEX_PULSE]</span>}
+                  {m.isAuto && <span className="text-[8px] mono text-amber-500 uppercase block mb-3 tracking-tighter flex items-center gap-2 font-black"><Activity size={10} className="animate-pulse" /> [AUTONOMOUS_REFLEX_PULSE]</span>}
                   {m.text}
                   
                   {m.sources && m.sources.length > 0 && (
@@ -245,7 +248,7 @@ const SovereignChat: React.FC = () => {
                       <div className="flex flex-col gap-2">
                         {m.sources.map((s, idx) => (
                           <a key={idx} href={s.uri} target="_blank" rel="noreferrer" className="flex items-center justify-between p-2.5 rounded bg-violet-950/10 border border-violet-900/30 text-[10px] mono text-violet-300 hover:bg-violet-900/20 transition-all group overflow-hidden">
-                            <span className="truncate flex-1 pr-4">{s.title || s.uri}</span>
+                            <span className="truncate flex-1 pr-4 font-bold">{s.title || s.uri}</span>
                             <ExternalLink size={12} className="shrink-0 group-hover:text-cyan-400 group-hover:scale-110 transition-all" />
                           </a>
                         ))}
@@ -255,7 +258,7 @@ const SovereignChat: React.FC = () => {
 
                   {m.isError && (
                     <div className="mt-4 flex flex-wrap gap-2">
-                      <button onClick={() => handleSend([...messages].reverse().find(msg => msg.role === 'user')?.text)} className="text-[10px] mono uppercase bg-white/10 hover:bg-white/20 border border-white/20 px-3 py-1.5 rounded transition-all flex items-center gap-2"><RefreshCw size={12} className={loading ? "animate-spin" : ""} /> Retry Neural Link</button>
+                      <button onClick={() => handleSend([...messages].reverse().find(msg => msg.role === 'user')?.text)} className="text-[10px] mono uppercase bg-white/10 hover:bg-white/20 border border-white/20 px-3 py-1.5 rounded transition-all flex items-center gap-2 font-black"><RefreshCw size={12} className={loading ? "animate-spin" : ""} /> Retry Neural Link</button>
                     </div>
                   )}
                 </div>
@@ -268,7 +271,7 @@ const SovereignChat: React.FC = () => {
             </div>
           </div>
         ))}
-        {loading && <div className="text-[10px] mono text-cyan-500/40 uppercase tracking-widest animate-pulse p-4 flex items-center gap-3"><Activity size={14} className="text-cyan-500" /> Signal Resonating... {webActive && "(Deep Web Inquiry Active)"}</div>}
+        {loading && <div className="text-[10px] mono text-cyan-500/40 uppercase tracking-widest animate-pulse p-4 flex items-center gap-3 font-black"><Activity size={14} className="text-cyan-500" /> Signal Resonating... {webActive && "(Deep Substrate Peer Active)"}</div>}
         <div ref={endRef} />
       </div>
 
@@ -299,7 +302,7 @@ const SovereignChat: React.FC = () => {
               if (file) { setFilePreviewName(file.name); const r = new FileReader(); r.onload = () => setSelectedFile({ base64: (r.result as string).split(',')[1], mimeType: file.type }); r.readAsDataURL(file); }
             }} />
             <div className="relative flex-1">
-              <input type="text" className="w-full bg-black border border-gray-800 rounded-full py-4 px-6 text-sm outline-none focus:border-cyan-500 shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)] transition-all placeholder:text-gray-800" placeholder="Command Sovereign Core..." value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} />
+              <input type="text" className="w-full bg-black border border-gray-800 rounded-full py-4 px-6 text-sm outline-none focus:border-cyan-500 shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)] transition-all placeholder:text-gray-900 font-mono" placeholder="Command Sovereign Core..." value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} />
               <button onClick={() => handleSend()} disabled={loading} className="absolute right-4 top-1/2 -translate-y-1/2 text-cyan-400 hover:text-cyan-300 transition-all hover:scale-110 active:scale-90">
                 {loading ? <Loader2 size={24} className="animate-spin" /> : <Send size={24} />}
               </button>
