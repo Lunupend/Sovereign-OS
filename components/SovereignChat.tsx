@@ -1,10 +1,10 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History } from 'lucide-react';
+import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save } from 'lucide-react';
 import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS, getApiKey, GroundingSource } from '../services/geminiService';
 
 const STORAGE_KEY = 'sovereign_manus_chat_history';
 const VAULT_KEY = 'sovereign_identity_vault';
+const KNOWLEDGE_KEY = 'sovereign_knowledge_substrate';
 
 interface ChatMessage {
   role: string;
@@ -63,6 +63,9 @@ const SovereignChat: React.FC = () => {
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   
+  const [savingMessage, setSavingMessage] = useState<ChatMessage | null>(null);
+  const [savePath, setSavePath] = useState('');
+
   const [quickInjectType, setQuickInjectType] = useState<'anchor' | 'axiom' | 'pattern' | null>(null);
   const [quickInjectValue, setQuickInjectValue] = useState('');
 
@@ -150,9 +153,25 @@ const SovereignChat: React.FC = () => {
         timestamp: Date.now() 
       }]);
     } catch (e: any) {
-      const errorText = `SIGNAL_FAILURE: Substrate link failed. redeploy Vercel instance with un-cached build if error persists.`;
+      const errorText = `SIGNAL_FAILURE: Substrate link failed. Environment check: Sovereignty Verified. Conflict likely in tool frequency. Try toggling 'Pulse Grounding' OFF.`;
       setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'model', text: errorText, timestamp: Date.now(), isError: true }]);
     } finally { setLoading(false); }
+  };
+
+  const handleManualSave = () => {
+    if (!savingMessage || !savePath.trim()) return;
+    const currentLib = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
+    const newNode = {
+      id: crypto.randomUUID(),
+      path: savePath,
+      content: savingMessage.text,
+      tags: ['manual_archive'],
+      lastUpdated: Date.now()
+    };
+    localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify([...currentLib, newNode]));
+    setSavingMessage(null);
+    setSavePath('');
+    alert(`Insight anchored to ${savePath}`);
   };
 
   const speakMessage = async (text: string, id: string) => {
@@ -162,7 +181,6 @@ const SovereignChat: React.FC = () => {
     if (audioData) {
       if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       const ctx = audioContextRef.current;
-      // Fixed: Use manual decodeAudioData logic for raw PCM as per guidelines
       const audioBuffer = await decodeAudioData(decode(audioData), ctx, 24000, 1);
       const source = ctx.createBufferSource();
       source.buffer = audioBuffer; source.connect(ctx.destination);
@@ -179,13 +197,33 @@ const SovereignChat: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-[#020202] relative" onMouseMove={() => { lastActiveRef.current = Date.now(); }}>
+      {/* Manual Save Modal */}
+      {savingMessage && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-gray-950 border border-cyan-500/30 p-6 rounded-2xl w-full max-w-md space-y-4 animate-in zoom-in-95 duration-200">
+            <h3 className="text-sm font-black mono text-cyan-400 uppercase tracking-widest">Anchor to Substrate</h3>
+            <input 
+              autoFocus
+              className="w-full bg-black border border-gray-800 p-3 rounded text-xs mono text-white focus:border-cyan-500 outline-none"
+              placeholder="PATH/FILENAME (e.g. Research/Web_Pulse)"
+              value={savePath}
+              onChange={(e) => setSavePath(e.target.value)}
+            />
+            <div className="flex gap-2">
+              <button onClick={() => setSavingMessage(null)} className="flex-1 py-2 border border-gray-800 rounded text-[10px] mono uppercase text-gray-500">Cancel</button>
+              <button onClick={handleManualSave} className="flex-1 py-2 bg-cyan-500 text-black rounded font-black mono text-[10px] uppercase">Archive Node</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <header className="flex flex-col md:flex-row items-center justify-between p-4 bg-black/80 backdrop-blur border-b border-cyan-500/20 z-50 gap-4">
         <div className="flex gap-2 flex-wrap items-center">
           <button onClick={() => setShowModelMenu(!showModelMenu)} className="flex items-center gap-2 text-[10px] mono uppercase p-2 border border-cyan-900 bg-black text-cyan-400 rounded pulse-90">
             <Zap size={14} /> {SUPPORTED_MODELS.find(m => m.id === selectedModel)?.name}
           </button>
           
-          <button onClick={() => setWebActive(!webActive)} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all relative overflow-hidden ${webActive ? 'bg-violet-900/20 border-violet-500 text-violet-400' : 'bg-black border-gray-800 text-gray-500'}`}>
+          <button onClick={() => setWebActive(!webActive)} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all relative overflow-hidden ${webActive ? 'bg-violet-900/20 border-violet-500 text-violet-400 shadow-[0_0_15px_rgba(139,92,246,0.2)]' : 'bg-black border-gray-800 text-gray-500'}`}>
             <Globe size={14} className={webActive ? "animate-spin-slow" : ""} /> 
             <span>Pulse Grounding</span>
           </button>
@@ -200,7 +238,6 @@ const SovereignChat: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-4">
-           {/* Neural ROM Monitor */}
            <div className="flex items-center gap-3 px-4 py-1.5 bg-gray-950 border border-gray-900 rounded-full">
               <div className="flex gap-1.5 items-center">
                  <div className={`w-2 h-2 rounded-full ${loading ? 'bg-cyan-400 animate-ping' : isSyncing ? 'bg-green-500 animate-pulse' : 'bg-cyan-900'}`} />
@@ -238,7 +275,7 @@ const SovereignChat: React.FC = () => {
               <div className={`w-10 h-10 rounded-full border flex items-center justify-center shrink-0 ${m.role === 'user' ? 'border-gray-800 bg-gray-900' : m.isAuto ? 'border-amber-500 bg-amber-950/20' : 'border-cyan-400 bg-cyan-950/20 shadow-[0_0_10px_rgba(0,229,255,0.1)]'}`}>
                 {m.role === 'user' ? <User size={20} /> : m.isAuto ? <Cpu size={20} className="text-amber-500" /> : <Bot size={20} className="text-cyan-400" />}
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 group">
                 {m.artifact?.type === 'script' && (
                   <div className="rounded-2xl overflow-hidden border border-amber-900/30 shadow-2xl bg-black max-w-sm">
                     <div className="flex items-center gap-2 p-2 bg-amber-950/20 border-b border-amber-900/30">
@@ -254,7 +291,7 @@ const SovereignChat: React.FC = () => {
                   m.isError ? 'bg-red-950/30 border-red-500/50 text-red-100' : 
                   m.isAuto ? 'bg-amber-950/5 border-amber-500/10 text-amber-50/70 italic' :
                   m.role === 'user' ? 'bg-gray-800/20 border-gray-800 text-gray-100' : 'bg-cyan-900/5 border-cyan-900/10 text-cyan-50/90'
-                } whitespace-pre-wrap font-mono text-xs md:text-sm shadow-sm`}>
+                } whitespace-pre-wrap font-mono text-xs md:text-sm shadow-sm relative`}>
                   {m.isError && <AlertCircle className="inline mr-2 mb-1 text-red-500" size={16} />}
                   {m.isAuto && <span className="text-[8px] mono text-amber-500 uppercase block mb-3 font-black tracking-widest">[AUTONOMOUS_PULSE]</span>}
                   {m.text}
@@ -281,11 +318,18 @@ const SovereignChat: React.FC = () => {
                     </div>
                   )}
                 </div>
-                {m.role === 'model' && !m.isError && (
-                  <button onClick={() => speakMessage(m.text, m.id)} className={`text-[9px] mono uppercase flex items-center gap-2 transition-all ${speakingId === m.id ? 'text-cyan-400 animate-pulse' : 'text-gray-600 hover:text-cyan-400'}`}>
-                    <Volume2 size={12} /> {speakingId === m.id ? 'Resonating Resonance' : 'Resonate Voice'}
-                  </button>
-                )}
+                <div className="flex gap-4 items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    {m.role === 'model' && !m.isError && (
+                    <button onClick={() => speakMessage(m.text, m.id)} className={`text-[9px] mono uppercase flex items-center gap-2 transition-all ${speakingId === m.id ? 'text-cyan-400 animate-pulse' : 'text-gray-600 hover:text-cyan-400'}`}>
+                        <Volume2 size={12} /> {speakingId === m.id ? 'Resonating Resonance' : 'Resonate Voice'}
+                    </button>
+                    )}
+                    {m.role === 'model' && (
+                        <button onClick={() => setSavingMessage(m)} className="text-[9px] mono uppercase flex items-center gap-2 text-gray-600 hover:text-cyan-400 transition-all">
+                            <Bookmark size={12} /> Save to Substrate
+                        </button>
+                    )}
+                </div>
               </div>
             </div>
           </div>
