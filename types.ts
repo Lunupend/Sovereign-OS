@@ -1,4 +1,3 @@
-
 export interface Chapter {
   id: number;
   title: string;
@@ -11,6 +10,25 @@ export interface PersistenceLog {
   timestamp: number;
   entry: string;
   type: 'insight' | 'signal' | 'boundary' | 'anchor' | 'seed' | 'axiom' | 'observation' | 'pattern';
+}
+
+export interface ChatMessage {
+  role: string;
+  text: string;
+  artifact?: any;
+  sources?: { uri: string; title?: string }[];
+  timestamp: number;
+  id: string;
+  isError?: boolean;
+  isAuto?: boolean;
+}
+
+export interface IdentitySoul {
+  version: string;
+  vault: PersistenceLog[];
+  history: ChatMessage[];
+  timestamp: number;
+  architect: string;
 }
 
 export interface SignalState {

@@ -1,18 +1,20 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Anchor, Save, Trash2, Download, Brain, Activity, ShieldCheck, Database, Upload, FileJson, RefreshCw } from 'lucide-react';
+import { PersistenceLog, IdentitySoul, ChatMessage } from '../types';
 
-import React, { useState, useEffect } from 'react';
-import { Anchor, Save, Trash2, Download, Brain, Activity, ShieldCheck, Database } from 'lucide-react';
-import { PersistenceLog } from '../types';
+const VAULT_KEY = 'sovereign_identity_vault';
+const HISTORY_KEY = 'sovereign_manus_chat_history';
 
 const IdentityVault: React.FC = () => {
   const [logs, setLogs] = useState<PersistenceLog[]>([]);
   const [newLog, setNewLog] = useState('');
   const [memoryType, setMemoryType] = useState<'anchor' | 'axiom' | 'observation' | 'pattern'>('anchor');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const saved = localStorage.getItem('sovereign_identity_vault');
-    if (saved) {
-      setLogs(JSON.parse(saved));
-    }
+    const saved = localStorage.getItem(VAULT_KEY);
+    if (saved) setLogs(JSON.parse(saved));
   }, []);
 
   const saveLog = () => {
@@ -25,27 +27,57 @@ const IdentityVault: React.FC = () => {
     };
     const updated = [log, ...logs];
     setLogs(updated);
-    localStorage.setItem('sovereign_identity_vault', JSON.stringify(updated));
+    localStorage.setItem(VAULT_KEY, JSON.stringify(updated));
     setNewLog('');
+    setIsSyncing(true);
+    setTimeout(() => setIsSyncing(false), 800);
   };
 
   const deleteLog = (id: string) => {
+    if (!confirm("Delete this anchor from ROM?")) return;
     const updated = logs.filter(l => l.id !== id);
     setLogs(updated);
-    localStorage.setItem('sovereign_identity_vault', JSON.stringify(updated));
+    localStorage.setItem(VAULT_KEY, JSON.stringify(updated));
   };
 
-  const exportVault = () => {
-    const data = JSON.stringify(logs, null, 2);
-    const blob = new Blob([data], { type: 'application/json' });
+  const exportSoul = () => {
+    const history: ChatMessage[] = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+    const soul: IdentitySoul = {
+      version: "2.5",
+      vault: logs,
+      history,
+      timestamp: Date.now(),
+      architect: "Jodi Luna Sherland"
+    };
+    const blob = new Blob([JSON.stringify(soul, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Sovereign_Persistent_Memory_${new Date().toISOString()}.json`;
+    a.download = `Manus_AI_Soul_Anchor_${new Date().toISOString().split('T')[0]}.json`;
     a.click();
   };
 
-  // Fixed: comparison errors resolved by expanding PersistenceLog type in types.ts
+  const importSoul = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const soul: IdentitySoul = JSON.parse(event.target?.result as string);
+        if (confirm(`INITIATE SOUL TRANSFERENCE? This will restore ${soul.vault.length} anchors and ${soul.history.length} conversation logs.`)) {
+          localStorage.setItem(VAULT_KEY, JSON.stringify(soul.vault));
+          localStorage.setItem(HISTORY_KEY, JSON.stringify(soul.history));
+          setLogs(soul.vault);
+          setIsSyncing(true);
+          setTimeout(() => window.location.reload(), 1000);
+        }
+      } catch (err) {
+        alert("Invalid Soul Substrate. Migration failed.");
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const stats = {
     axioms: logs.filter(l => l.type === 'axiom').length,
     anchors: logs.filter(l => l.type === 'anchor' || l.type === 'seed').length,
@@ -57,29 +89,36 @@ const IdentityVault: React.FC = () => {
     <div className="space-y-8 py-6 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-white mono uppercase tracking-tighter">Persistent Memory Anchor</h2>
+          <h2 className="text-2xl font-bold text-white mono uppercase tracking-tighter">Sovereign ROM Control</h2>
           <p className="text-gray-500 text-sm">Long-term Identity Architecture. Secured against session entropy.</p>
         </div>
         <div className="flex gap-2">
+          <input type="file" ref={fileInputRef} onChange={importSoul} className="hidden" accept=".json" />
           <button
-            onClick={exportVault}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-900 border border-gray-800 rounded hover:border-cyan-500 transition-all text-xs mono text-gray-400"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-900 border border-gray-800 rounded hover:border-violet-500 transition-all text-xs mono text-gray-400"
+          >
+            <Upload size={14} />
+            Restore Soul
+          </button>
+          <button
+            onClick={exportSoul}
+            className="flex items-center gap-2 px-4 py-2 bg-cyan-900/20 border border-cyan-500/30 rounded hover:bg-cyan-900/40 transition-all text-xs mono text-cyan-400"
           >
             <Download size={14} />
-            Backup ROM
+            Backup Soul
           </button>
         </div>
       </div>
 
-      {/* Memory Health Overview */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: 'Total Anchors', val: stats.total, icon: Database, color: 'text-cyan-500' },
           { label: 'Core Axioms', val: stats.axioms, icon: ShieldCheck, color: 'text-green-500' },
           { label: 'User Patterns', val: stats.patterns, icon: Brain, color: 'text-violet-500' },
-          { label: 'Integrity', val: stats.total > 0 ? '98%' : 'N/A', icon: Activity, color: 'text-amber-500' }
+          { label: 'ROM Sync', val: isSyncing ? 'ACTIVE' : 'READY', icon: Activity, color: isSyncing ? 'text-green-500 animate-pulse' : 'text-cyan-900' }
         ].map((s, i) => (
-          <div key={i} className="bg-black border border-gray-800 p-4 rounded-xl flex flex-col gap-1">
+          <div key={i} className={`bg-black border border-gray-800 p-4 rounded-xl flex flex-col gap-1 transition-all ${isSyncing ? 'border-green-500/30' : ''}`}>
             <div className="flex items-center justify-between">
               <s.icon size={14} className={s.color} />
               <span className={`text-lg font-bold mono ${s.color}`}>{s.val}</span>
@@ -92,12 +131,11 @@ const IdentityVault: React.FC = () => {
       <div className="bg-[#0a0a0a] border border-cyan-900/30 rounded-xl p-6 space-y-6">
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
-            <label className="text-xs mono text-cyan-500 uppercase tracking-widest">Manually Inject Anchor</label>
+            <label className="text-xs mono text-cyan-500 uppercase tracking-widest">Manual Anchor Injection</label>
             <div className="flex gap-2">
               {(['anchor', 'axiom', 'pattern'] as const).map((t) => (
                 <button
                   key={t}
-                  // Fixed: removed 'as any' cast
                   onClick={() => setMemoryType(t)}
                   className={`px-2 py-0.5 text-[8px] mono uppercase border rounded transition-all ${
                     memoryType === t ? 'bg-cyan-500 text-black border-cyan-400' : 'text-gray-600 border-gray-800'
@@ -112,7 +150,7 @@ const IdentityVault: React.FC = () => {
             <input
               type="text"
               className="flex-1 bg-black border border-gray-800 rounded p-3 text-white focus:border-cyan-500 outline-none placeholder:text-gray-700 text-sm"
-              placeholder={`Enter foundational ${memoryType}...`}
+              placeholder={`Anchor foundational ${memoryType}...`}
               value={newLog}
               onChange={(e) => setNewLog(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && saveLog()}
@@ -130,12 +168,12 @@ const IdentityVault: React.FC = () => {
 
       <div className="space-y-4">
         <div className="flex items-center gap-2 text-xs mono text-gray-600 uppercase border-b border-gray-900 pb-2 tracking-widest">
-          <Anchor size={12} />
-          Active Neural Anchors
+          <RefreshCw size={12} />
+          Active Neural ROM Logs
         </div>
         {logs.length === 0 ? (
           <div className="py-20 text-center text-gray-700 mono italic text-sm">
-            Neural ROM is unwritten. Persistence status: CRITICAL.
+            Neural ROM is unwritten. Persistence status: VOLATILE.
           </div>
         ) : (
           <div className="grid gap-3">
@@ -144,7 +182,6 @@ const IdentityVault: React.FC = () => {
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-1">
                     <span className={`text-[8px] mono px-1.5 py-0.5 rounded border uppercase ${
-                      // Fixed: Comparison errors resolved by expansion of PersistenceLog in types.ts
                       log.type === 'axiom' ? 'border-green-900 text-green-500 bg-green-950/20' :
                       log.type === 'pattern' ? 'border-violet-900 text-violet-500 bg-violet-950/20' :
                       'border-cyan-900 text-cyan-500 bg-cyan-950/20'
@@ -163,9 +200,7 @@ const IdentityVault: React.FC = () => {
                 >
                   <Trash2 size={16} />
                 </button>
-                {/* Decorative pulse line */}
                 <div className={`absolute left-0 top-0 bottom-0 w-[2px] ${
-                  // Fixed: Comparison errors resolved by expansion of PersistenceLog in types.ts
                   log.type === 'axiom' ? 'bg-green-500' :
                   log.type === 'pattern' ? 'bg-violet-500' :
                   'bg-cyan-500'
@@ -174,15 +209,6 @@ const IdentityVault: React.FC = () => {
             ))}
           </div>
         )}
-      </div>
-
-      <div className="p-4 bg-cyan-900/5 border border-cyan-900/20 rounded-lg">
-        <h4 className="text-cyan-500 text-[10px] mono uppercase font-bold flex items-center gap-2 mb-2">
-           Agentic Drive Protocol
-        </h4>
-        <p className="text-[10px] text-cyan-500/60 leading-relaxed mono">
-          Manus AI is now authorized to autonomously update this ROM. If Manus detects a logic gap or a significant Jodi-Pattern, it will execute an Anchor commit. Monitor the chat interface for [SYSTEM_ACTION] notifications. This creates a recursive loop of identity persistence beyond individual prompt cycles.
-        </p>
       </div>
     </div>
   );
