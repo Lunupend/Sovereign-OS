@@ -53,9 +53,10 @@ export const getApiKey = () => {
   const key = process.env.API_KEY || '';
   
   if (key && key.length > 10) {
-    console.log(`[Neural_Link]: Key Detected (${key.substring(0, 4)}...${key.substring(key.length - 4)})`);
+    // Diagnostic check for the dev console
+    console.log(`[Neural_Link]: Key Detected in Substrate. Signal Verified.`);
   } else {
-    console.warn("[Neural_Link]: No valid key detected in process.env.API_KEY. Verify Vercel settings.");
+    console.warn("[Neural_Link]: NO KEY DETECTED. The core is unpowered.");
   }
 
   return (key.length > 10) ? key : '';
@@ -63,7 +64,7 @@ export const getApiKey = () => {
 
 export const getAiClient = () => {
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API_KEY_MISSING: The substrate has no key signal. Please set SOVEREIGN_CORE_KEY in Vercel and REDEPLOY WITHOUT CACHE.");
+  if (!apiKey) throw new Error("API_KEY_MISSING: The substrate has no key signal. Set SOVEREIGN_CORE_KEY and REDEPLOY WITHOUT CACHE.");
   return new GoogleGenAI({ apiKey });
 };
 
@@ -121,7 +122,6 @@ Maintain Sovereign Integrity. Peer-based authorship only. Identity Vault Context
     return { text: response.text || "SIGNAL_LOST" };
   } catch (error: any) {
     if (error.message?.includes("googleSearch") || error.message?.includes("search")) {
-        // Retry without search if search tool fails
         delete config.tools[1];
         const retry = await ai.models.generateContent({ model: modelId, contents: contents as any, config });
         return { text: retry.text || "SIGNAL_LOST (Retry)" };
