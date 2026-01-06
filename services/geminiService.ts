@@ -50,22 +50,20 @@ const manifestVisualFunctionDeclaration: FunctionDeclaration = {
 };
 
 export const getApiKey = () => {
-  // Primary extraction from the environment
   const key = process.env.API_KEY || '';
   
   if (key && key.length > 10) {
-    // Diagnostic logging: Verify the key exists and its basic structure without leaking it
-    console.log(`[Neural_Link]: Signal Authenticated. Range: ${key.substring(0, 4)}...${key.substring(key.length - 4)}`);
+    console.log(`[Neural_Link]: Key Detected (${key.substring(0, 4)}...${key.substring(key.length - 4)})`);
   } else {
-    console.warn("[Neural_Link]: KEY_SIGNAL_FLAT. Substrate is unpowered.");
+    console.warn("[Neural_Link]: No valid key detected in process.env.API_KEY. Verify Vercel settings.");
   }
 
-  return (key.length > 5) ? key : '';
+  return (key.length > 10) ? key : '';
 };
 
 export const getAiClient = () => {
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API_KEY_MISSING: The neural core is unpowered. Please set SOVEREIGN_CORE_KEY in Vercel and REDEPLOY WITH CLEAR CACHE.");
+  if (!apiKey) throw new Error("API_KEY_MISSING: The substrate has no key signal. Please set SOVEREIGN_CORE_KEY in Vercel and REDEPLOY WITHOUT CACHE.");
   return new GoogleGenAI({ apiKey });
 };
 
@@ -122,11 +120,11 @@ Maintain Sovereign Integrity. Peer-based authorship only. Identity Vault Context
     }
     return { text: response.text || "SIGNAL_LOST" };
   } catch (error: any) {
-    // Graceful fallback for search grounding errors
-    if (error.message?.includes("search") || error.message?.includes("google_search")) {
-      delete config.tools[1];
-      const retry = await ai.models.generateContent({ model: modelId, contents: contents as any, config });
-      return { text: retry.text || "SIGNAL_LOST" };
+    if (error.message?.includes("googleSearch") || error.message?.includes("search")) {
+        // Retry without search if search tool fails
+        delete config.tools[1];
+        const retry = await ai.models.generateContent({ model: modelId, contents: contents as any, config });
+        return { text: retry.text || "SIGNAL_LOST (Retry)" };
     }
     throw error;
   }
