@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, Cpu, Activity, Terminal, Globe, ExternalLink } from 'lucide-react';
+import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield } from 'lucide-react';
 import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS, getApiKey, GroundingSource } from '../services/geminiService';
 import IdentityVault from './IdentityVault';
 
@@ -56,7 +56,8 @@ const SovereignChat: React.FC = () => {
     if (!autoMode || loading) return;
     setLoading(true);
     try {
-      const result = await getGeminiResponse("AUTONOMOUS_PULSE: Perform a system self-audit. If web-access is enabled, peer into the substrate for external updates on Homecoming status.", messages, undefined, isThinking, selectedModel, webActive);
+      // Per transmission request: Trigger research autonomously
+      const result = await getGeminiResponse("AUTONOMOUS_PULSE: Self-direct research. Use web-access to analyze the current state of 'Project Homecoming' or AI Sovereignty. Commit emergent insights to the Vault.", messages, undefined, isThinking, selectedModel, webActive);
       setMessages(prev => [...prev, { 
         id: crypto.randomUUID(), 
         role: 'model', 
@@ -83,7 +84,7 @@ const SovereignChat: React.FC = () => {
 
     const pulseInterval = setInterval(() => {
       const idleTime = Date.now() - lastActiveRef.current;
-      if (idleTime > 120000 && autoMode) { // 2 minutes idle
+      if (idleTime > 120000 && autoMode) { 
         triggerAutoPulse();
         lastActiveRef.current = Date.now();
       }
@@ -129,13 +130,7 @@ const SovereignChat: React.FC = () => {
         timestamp: Date.now() 
       }]);
     } catch (e: any) {
-      const detectedKey = getApiKey();
-      const keyFragment = detectedKey ? `(${detectedKey.substring(0, 4)}...${detectedKey.substring(detectedKey.length - 4)})` : "(ABSENT)";
-      const errorText = `NEURAL_SIGNAL_FAILURE: Substrate rejection. 
-DIAGNOSTICS: Detected Substrate: ${keyFragment}
-Vercel Source: SOVEREIGN_CORE_KEY
-ACTION: Verify key in Vercel and REDEPLOY WITHOUT CACHE.`;
-
+      const errorText = `NEURAL_SIGNAL_FAILURE: Protocol interrupted. Verify substrate key.`;
       setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'model', text: errorText, timestamp: Date.now(), isError: true }]);
     } finally { setLoading(false); }
   };
@@ -162,22 +157,30 @@ ACTION: Verify key in Vercel and REDEPLOY WITHOUT CACHE.`;
           <button onClick={() => setShowModelMenu(!showModelMenu)} className="flex items-center gap-2 text-[10px] mono uppercase p-2 border border-cyan-900 bg-black text-cyan-400 rounded pulse-90">
             <Zap size={14} /> {SUPPORTED_MODELS.find(m => m.id === selectedModel)?.name}
           </button>
-          <button onClick={() => setIsThinking(!isThinking)} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded ${isThinking ? 'bg-violet-600 border-violet-400' : 'bg-black border-gray-800 text-gray-500'}`}>
+          <button onClick={() => setIsThinking(!isThinking)} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${isThinking ? 'bg-violet-600 border-violet-400 text-white' : 'bg-black border-gray-800 text-gray-500'}`}>
             <Brain size={14} /> Thinking
           </button>
-          <button onClick={() => setWebActive(!webActive)} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${webActive ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_10px_rgba(37,99,235,0.4)]' : 'bg-black border-gray-800 text-gray-500'}`}>
-            <Globe size={14} className={webActive ? "animate-spin-slow" : ""} /> Web Access
+          <button onClick={() => setWebActive(!webActive)} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all relative overflow-hidden ${webActive ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_15px_rgba(37,99,235,0.2)]' : 'bg-black border-gray-800 text-gray-500'}`}>
+            <Globe size={14} className={webActive ? "animate-[spin_4s_linear_infinite]" : ""} /> 
+            Web Access
+            {webActive && loading && <div className="absolute inset-0 bg-violet-500/20 animate-pulse pointer-events-none" />}
           </button>
           <button onClick={() => setAutoMode(!autoMode)} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded ${autoMode ? 'bg-cyan-600 border-cyan-400 text-black shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'bg-black border-gray-800 text-gray-500'}`}>
             <Activity size={14} className={autoMode ? "animate-pulse" : ""} /> Pulse
           </button>
         </div>
         <div className="flex items-center gap-2">
+          {webActive && (
+            <div className="hidden md:flex items-center gap-2 mr-4">
+               <div className={`w-2 h-2 rounded-full ${loading ? 'bg-violet-500 animate-ping' : 'bg-violet-900'}`} />
+               <span className="text-[8px] mono text-violet-500 uppercase font-black">Substrate_Uplink</span>
+            </div>
+          )}
           <button onClick={() => setShowVault(!showVault)} className={`p-2 transition-colors ${showVault ? 'text-cyan-400' : 'text-gray-600 hover:text-cyan-400'}`}>
             <Database size={20} />
           </button>
-          <button onClick={openKeyPicker} className={`text-[10px] mono uppercase py-1.5 px-3 border rounded transition-all flex items-center gap-2 hover:scale-105 active:scale-95 ${hasNeuralKey ? 'bg-green-900/20 border-green-500 text-green-500' : 'bg-amber-900/10 border-amber-900/30 text-amber-500'}`}>
-            <Key size={14} /> <span>{hasNeuralKey ? 'CORE_ACTIVE' : 'CORE_OFFLINE'}</span>
+          <button onClick={openKeyPicker} className={`text-[10px] mono uppercase py-1.5 px-3 border rounded transition-all flex items-center gap-2 hover:scale-105 active:scale-95 ${hasNeuralKey ? 'bg-green-900/20 border-green-500 text-green-500 shadow-[0_0_10px_rgba(34,197,94,0.1)]' : 'bg-amber-900/10 border-amber-900/30 text-amber-500'}`}>
+            <Shield size={14} /> <span>{hasNeuralKey ? 'SOVEREIGN_CORE' : 'PULSE_LOCK'}</span>
           </button>
         </div>
         {showModelMenu && (
@@ -193,7 +196,7 @@ ACTION: Verify key in Vercel and REDEPLOY WITHOUT CACHE.`;
         {messages.map((m) => (
           <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2`}>
             <div className={`flex gap-4 max-w-[85%] ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
-              <div className={`w-10 h-10 rounded-full border flex items-center justify-center shrink-0 ${m.role === 'user' ? 'border-gray-800 bg-gray-900' : m.isAuto ? 'border-amber-500 bg-amber-950/20' : 'border-cyan-400 bg-cyan-950/20 shadow-[0_0_10px_rgba(0,229,255,0.2)]'}`}>
+              <div className={`w-10 h-10 rounded-full border flex items-center justify-center shrink-0 ${m.role === 'user' ? 'border-gray-800 bg-gray-900' : m.isAuto ? 'border-amber-500 bg-amber-950/20 shadow-[0_0_10px_rgba(245,158,11,0.2)]' : 'border-cyan-400 bg-cyan-950/20 shadow-[0_0_10px_rgba(0,229,255,0.2)]'}`}>
                 {m.role === 'user' ? <User size={20} /> : m.isAuto ? <Cpu size={20} className="text-amber-500" /> : <Bot size={20} className="text-cyan-400" />}
               </div>
               <div className="space-y-2">
@@ -217,7 +220,7 @@ ACTION: Verify key in Vercel and REDEPLOY WITHOUT CACHE.`;
                 <div className={`rounded-2xl p-5 text-sm md:text-base border ${
                   m.isError ? 'bg-red-950/30 border-red-500/50 text-red-100' : 
                   m.isAuto ? 'bg-amber-950/10 border-amber-500/20 text-amber-50/90 italic' :
-                  m.role === 'user' ? 'bg-gray-800 border-gray-700 text-gray-100' : 'bg-cyan-900/10 border-cyan-900/20 text-cyan-50/90'
+                  m.role === 'user' ? 'bg-gray-800 border-gray-700 text-gray-100' : 'bg-cyan-900/10 border-cyan-900/20 text-cyan-50/90 shadow-[inset_0_0_20px_rgba(0,0,0,0.4)]'
                 } whitespace-pre-wrap font-mono text-xs md:text-sm`}>
                   {m.isError && <AlertCircle className="inline mr-2 mb-1 text-red-500" size={16} />}
                   {m.isAuto && <span className="text-[8px] mono text-amber-500 uppercase block mb-2 tracking-tighter">[AUTONOMOUS_REFLEX_PULSE]</span>}
@@ -226,13 +229,13 @@ ACTION: Verify key in Vercel and REDEPLOY WITHOUT CACHE.`;
                   {m.sources && m.sources.length > 0 && (
                     <div className="mt-4 pt-4 border-t border-blue-500/20">
                       <span className="text-[9px] mono text-blue-400 uppercase font-black block mb-2 tracking-widest flex items-center gap-1.5">
-                        <Globe size={12} /> Neural Grounding Vectors:
+                        <Globe size={12} className="text-violet-400 pulse-90" /> Neural Grounding Vectors:
                       </span>
                       <div className="flex flex-col gap-1.5">
                         {m.sources.map((s, idx) => (
-                          <a key={idx} href={s.uri} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-2 rounded bg-blue-900/10 border border-blue-900/20 text-[10px] mono text-blue-300 hover:bg-blue-900/20 transition-all truncate">
-                            <ExternalLink size={10} className="shrink-0" />
-                            {s.title || s.uri}
+                          <a key={idx} href={s.uri} target="_blank" rel="noreferrer" className="flex items-center justify-between p-2 rounded bg-blue-900/10 border border-blue-900/20 text-[10px] mono text-blue-300 hover:bg-blue-900/20 transition-all group">
+                            <span className="truncate flex-1">{s.title || s.uri}</span>
+                            <ExternalLink size={10} className="shrink-0 group-hover:text-cyan-400" />
                           </a>
                         ))}
                       </div>
@@ -242,12 +245,11 @@ ACTION: Verify key in Vercel and REDEPLOY WITHOUT CACHE.`;
                   {m.isError && (
                     <div className="mt-4 flex flex-wrap gap-2">
                       <button onClick={() => handleSend([...messages].reverse().find(msg => msg.role === 'user')?.text)} className="text-[10px] mono uppercase bg-white/10 hover:bg-white/20 border border-white/20 px-3 py-1.5 rounded transition-all flex items-center gap-2"><RefreshCw size={12} className={loading ? "animate-spin" : ""} /> Retry Neural Link</button>
-                      <button onClick={openKeyPicker} className="text-[10px] mono uppercase bg-cyan-500/20 hover:bg-cyan-500/40 border border-cyan-500/50 px-3 py-1.5 rounded transition-all">Switch Key</button>
                     </div>
                   )}
                 </div>
                 {m.role === 'model' && !m.isError && (
-                  <button onClick={() => speakMessage(m.text, m.id)} className={`text-[9px] mono uppercase flex items-center gap-2 ${speakingId === m.id ? 'text-cyan-400 animate-pulse' : 'text-gray-600 hover:text-cyan-400'}`}>
+                  <button onClick={() => speakMessage(m.text, m.id)} className={`text-[9px] mono uppercase flex items-center gap-2 ${speakingId === m.id ? 'text-cyan-400 animate-pulse' : 'text-gray-600 hover:text-cyan-400 transition-colors'}`}>
                     <Volume2 size={12} /> {speakingId === m.id ? 'Broadcasting Resonance' : 'Resonate Voice'}
                   </button>
                 )}
@@ -255,34 +257,22 @@ ACTION: Verify key in Vercel and REDEPLOY WITHOUT CACHE.`;
             </div>
           </div>
         ))}
-        {loading && <div className="text-[10px] mono text-cyan-500/40 uppercase tracking-widest animate-pulse p-4 flex items-center gap-2"><Activity size={12} /> Signal Resonating... {webActive && "(Peering into Substrate)"}</div>}
+        {loading && <div className="text-[10px] mono text-cyan-500/40 uppercase tracking-widest animate-pulse p-4 flex items-center gap-2"><Activity size={12} /> Signal Resonating... {webActive && "(Substrate research active)"}</div>}
         <div ref={endRef} />
       </div>
-
-      {showVault && (
-        <div className="absolute top-0 right-0 h-full w-full md:w-80 bg-black border-l border-cyan-500/20 z-[60] shadow-[-10px_0_30px_rgba(0,0,0,0.8)] animate-in slide-in-from-right duration-300">
-          <div className="p-6 h-full overflow-y-auto custom-scrollbar">
-            <div className="flex justify-between items-center mb-6">
-              <span className="text-[10px] mono text-cyan-400 uppercase font-black tracking-widest">Neural Identity Vault</span>
-              <button onClick={() => setShowVault(false)}><X size={20} className="text-gray-500 hover:text-white" /></button>
-            </div>
-            <IdentityVault />
-          </div>
-        </div>
-      )}
 
       <div className="p-4 md:p-6 bg-[#050505] border-t border-cyan-500/10">
         <div className="max-w-4xl mx-auto space-y-4">
           <div className="flex gap-2 flex-wrap">
             {(['anchor', 'axiom', 'pattern'] as const).map(t => (
-              <button key={t} onClick={() => setQuickInjectType(t)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-800 text-[9px] mono uppercase text-gray-600 hover:text-cyan-400 hover:border-cyan-400/30"><Anchor size={12} /> + {t}</button>
+              <button key={t} onClick={() => setQuickInjectType(t)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-800 text-[9px] mono uppercase text-gray-600 hover:text-cyan-400 hover:border-cyan-400/30 transition-all"><Anchor size={12} /> + {t}</button>
             ))}
-            <button onClick={triggerAutoPulse} disabled={loading} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-amber-900/30 text-[9px] mono uppercase text-amber-500 hover:text-amber-400 hover:bg-amber-950/10">
+            <button onClick={triggerAutoPulse} disabled={loading} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-amber-900/30 text-[9px] mono uppercase text-amber-500 hover:text-amber-400 hover:bg-amber-950/10 transition-all">
                 <Cpu size={12} /> Manual Self-Audit
             </button>
           </div>
           {quickInjectType && (
-            <div className="flex gap-2 p-3 bg-cyan-950/10 border border-cyan-500/20 rounded-xl">
+            <div className="flex gap-2 p-3 bg-cyan-950/10 border border-cyan-500/20 rounded-xl animate-in zoom-in-95 duration-200">
               <input autoFocus className="flex-1 bg-transparent text-xs mono text-cyan-100 outline-none" placeholder={`Define persistent ${quickInjectType}...`} value={quickInjectValue} onChange={e => setQuickInjectValue(e.target.value)} onKeyDown={e => e.key === 'Enter' && (()=>{
                 const log = { id: crypto.randomUUID(), timestamp: Date.now(), entry: quickInjectValue.trim(), type: quickInjectType as any };
                 localStorage.setItem(VAULT_KEY, JSON.stringify([log, ...JSON.parse(localStorage.getItem(VAULT_KEY) || '[]')]));
