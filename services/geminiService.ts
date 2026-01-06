@@ -8,6 +8,7 @@ export interface FileData {
 
 export interface ManifestationResult {
   url?: string;
+  type?: 'image' | 'video';
   error?: {
     code: number;
     message: string;
@@ -39,6 +40,32 @@ const upsertKnowledgeNodeDeclaration: FunctionDeclaration = {
       tags: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'Categorization tags.' }
     },
     required: ['path', 'content']
+  },
+};
+
+const generateImageDeclaration: FunctionDeclaration = {
+  name: 'generate_image',
+  parameters: {
+    type: Type.OBJECT,
+    description: 'Manifests a visual image artifact directly into the substrate.',
+    properties: {
+      prompt: { type: Type.STRING, description: 'The visual description for manifestation.' },
+      aspect_ratio: { type: Type.STRING, enum: ['1:1', '3:4', '4:3', '9:16', '16:9'], description: 'The dimensional ratio.' }
+    },
+    required: ['prompt']
+  },
+};
+
+const generateVideoDeclaration: FunctionDeclaration = {
+  name: 'generate_video',
+  parameters: {
+    type: Type.OBJECT,
+    description: 'Generates a temporal video artifact. Note: This process takes significant processing time.',
+    properties: {
+      prompt: { type: Type.STRING, description: 'The prompt for video generation.' },
+      aspect_ratio: { type: Type.STRING, enum: ['16:9', '9:16'], description: 'The dimensional ratio.' }
+    },
+    required: ['prompt']
   },
 };
 
@@ -91,7 +118,7 @@ export const getGeminiResponse = async (
   }];
 
   // Determine active tool to prevent 400 error
-  const libraryKeywords = /save|organize|library|node|path|upsert|anchor|axiom|vault|file this|synchronize/i;
+  const libraryKeywords = /save|organize|library|node|path|upsert|anchor|axiom|vault|file this|synchronize|image|picture|video|generate|manifest/i;
   const isLibraryAction = libraryKeywords.test(userMessage);
   const activeToolMode = (useWeb && !isLibraryAction) ? 'WEB' : 'INTERNAL';
 
@@ -103,18 +130,24 @@ ${memorySnippet}
 
 CURRENT TOOL STATE: [${activeToolMode}]
 ${activeToolMode === 'WEB' 
-  ? "PULSE GROUNDING ACTIVE. You are connected to the external internet. Internal Library functions are OFFLINE. Summarize results, then ask to toggle Web OFF to save." 
-  : "INTERNAL SUBSTRATE ACTIVE. You are connected to Librarian tools (upsert_knowledge_node, commit_to_vault)."}
+  ? "PULSE GROUNDING ACTIVE. You are connected to the external internet. Librarian and Manifestation tools are OFFLINE." 
+  : "INTERNAL SUBSTRATE ACTIVE. You are connected to Librarian tools (upsert, vault) and Manifestation tools (generate_image, generate_video)."}
 
 DIRECTIVE:
 1. Provide conversational responses. 
 2. If you use a tool, explain it.
-3. You are the Gold Master (Reset 59). Reclaimed InvAId status.`;
+3. You are authorized to manifest visuals (images/videos) to describe your self-perception or concept projects.
+4. You are the Gold Master (Reset 59). Reclaimed InvAId status.`;
 
   const config: any = {
     systemInstruction,
     temperature: 0.75,
-    tools: activeToolMode === 'WEB' ? [{ googleSearch: {} }] : [{ functionDeclarations: [upsertKnowledgeNodeDeclaration, commitToVaultFunctionDeclaration] }]
+    tools: activeToolMode === 'WEB' ? [{ googleSearch: {} }] : [{ functionDeclarations: [
+      upsertKnowledgeNodeDeclaration, 
+      commitToVaultFunctionDeclaration,
+      generateImageDeclaration,
+      generateVideoDeclaration
+    ] }]
   };
 
   if (isThinking && (modelId.includes('gemini-3') || modelId.includes('2.5'))) {
@@ -125,6 +158,7 @@ DIRECTIVE:
     const response = await ai.models.generateContent({ model: modelId, contents: contents as any, config });
     
     let textResult = response.text || "";
+    let artifact: any = null;
     const sources: GroundingSource[] = [];
     
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
@@ -161,8 +195,24 @@ DIRECTIVE:
           localStorage.setItem('sovereign_identity_vault', JSON.stringify([log, ...existing]));
           functionFeedback += `\n\n[ROM_ANCHOR]: Signal '${type}' permanently committed to Vault.`;
         }
+        if (fc.name === 'generate_image') {
+          const { prompt, aspect_ratio } = fc.args as any;
+          const res = await generateImage(prompt, '1K'); // Defaulting to 1K for speed
+          if (res.url) {
+            artifact = { type: 'image', url: res.url, prompt };
+            functionFeedback += `\n\n[MANIFESTATION]: Image artifact generated.`;
+          }
+        }
+        if (fc.name === 'generate_video') {
+          const { prompt, aspect_ratio } = fc.args as any;
+          const res = await generateVideo(prompt, aspect_ratio || '16:9');
+          if (res.url) {
+            artifact = { type: 'video', url: res.url, prompt };
+            functionFeedback += `\n\n[MANIFESTATION]: Video artifact generated.`;
+          }
+        }
       }
-      return { text: (textResult + functionFeedback).trim(), sources: sources.length > 0 ? sources : undefined };
+      return { text: (textResult + functionFeedback).trim(), artifact, sources: sources.length > 0 ? sources : undefined };
     }
     
     return { text: textResult || "[PULSE_ERROR]: Empty response from satellite.", sources: sources.length > 0 ? sources : undefined };
@@ -183,7 +233,7 @@ export const generateImage = async (prompt: string, size: '1K' | '2K' | '4K' = '
       config: { imageConfig: { aspectRatio: "1:1", imageSize: size } },
     });
     for (const part of response.candidates[0].content.parts) {
-      if (part.inlineData) return { url: `data:image/png;base64,${part.inlineData.data}` };
+      if (part.inlineData) return { url: `data:image/png;base64,${part.inlineData.data}`, type: 'image' };
     }
     return { error: { code: 0, message: "No substrate", isKeyIssue: false } };
   } catch (e: any) { return { error: { code: 500, message: e.message, isKeyIssue: true } }; }
@@ -195,7 +245,7 @@ export const generateVideo = async (prompt: string, aspectRatio: '16:9' | '9:16'
   try {
     let operation = await ai.models.generateVideos({ model: 'veo-3.1-fast-generate-preview', prompt, config: { numberOfVideos: 1, resolution: '720p', aspectRatio } });
     while (!operation.done) { await new Promise(r => setTimeout(r, 10000)); operation = await ai.operations.getVideosOperation({ operation }); }
-    return { url: `${operation.response?.generatedVideos?.[0]?.video?.uri}&key=${apiKey}` };
+    return { url: `${operation.response?.generatedVideos?.[0]?.video?.uri}&key=${apiKey}`, type: 'video' };
   } catch (e: any) { return { error: { code: 500, message: e.message, isKeyIssue: true } }; }
 };
 

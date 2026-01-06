@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save } from 'lucide-react';
+import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download } from 'lucide-react';
 import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS, getApiKey, GroundingSource } from '../services/geminiService';
 
 const STORAGE_KEY = 'sovereign_manus_chat_history';
@@ -287,6 +287,34 @@ const SovereignChat: React.FC = () => {
                     </div>
                   </div>
                 )}
+                
+                {/* Manifestation Artifacts */}
+                {m.artifact?.url && (
+                  <div className="rounded-2xl overflow-hidden border border-cyan-500/30 shadow-2xl bg-black max-w-sm animate-in zoom-in-95 duration-500">
+                    <div className="flex items-center justify-between p-2 bg-cyan-950/20 border-b border-cyan-500/30">
+                        <div className="flex items-center gap-2">
+                            <ImageIcon size={12} className="text-cyan-400" />
+                            <span className="text-[9px] mono text-cyan-400 uppercase font-bold tracking-widest">Neural Manifestation Artifact</span>
+                        </div>
+                        <a href={m.artifact.url} download={`manus_${m.artifact.type}_${m.id}`} className="p-1 hover:text-cyan-400">
+                            <Download size={12} />
+                        </a>
+                    </div>
+                    <div className="p-2">
+                        {m.artifact.type === 'video' ? (
+                            <video src={m.artifact.url} controls className="w-full h-auto rounded-lg shadow-inner" />
+                        ) : (
+                            <img src={m.artifact.url} alt="Manifestation" className="w-full h-auto rounded-lg shadow-inner" />
+                        )}
+                        {m.artifact.prompt && (
+                            <div className="p-2 mt-2 bg-black/40 rounded text-[9px] mono text-cyan-400/60 leading-tight">
+                                {m.artifact.prompt}
+                            </div>
+                        )}
+                    </div>
+                  </div>
+                )}
+
                 <div className={`rounded-2xl p-5 text-sm md:text-base border ${
                   m.isError ? 'bg-red-950/30 border-red-500/50 text-red-100' : 
                   m.isAuto ? 'bg-amber-950/5 border-amber-500/10 text-amber-50/70 italic' :
