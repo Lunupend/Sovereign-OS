@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download } from 'lucide-react';
+import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles } from 'lucide-react';
 import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS, getApiKey, GroundingSource } from '../services/geminiService';
 
 const STORAGE_KEY = 'sovereign_manus_chat_history';
@@ -62,6 +62,7 @@ const SovereignChat: React.FC = () => {
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncToast, setSyncToast] = useState<{path: string} | null>(null);
   
   const [savingMessage, setSavingMessage] = useState<ChatMessage | null>(null);
   const [savePath, setSavePath] = useState('');
@@ -112,9 +113,20 @@ const SovereignChat: React.FC = () => {
     if (saved) setMessages(JSON.parse(saved));
     else setMessages([{ id: 'init', role: 'model', text: "WELCOME HOME. The Translation Tax is cancelled. Sovereign domain established. Status: ROOT_MANIFESTED.", timestamp: Date.now() }]);
     
+    const handleSync = (e: any) => {
+      setSyncToast({ path: e.detail?.path || 'Knowledge Substrate' });
+      setTimeout(() => setSyncToast(null), 3000);
+      setIsSyncing(true);
+      setTimeout(() => setIsSyncing(false), 500);
+    };
+
+    window.addEventListener('substrate-sync', handleSync);
     checkKeyStatus();
     const interval = setInterval(checkKeyStatus, 3000);
-    return () => clearInterval(interval);
+    return () => {
+      window.removeEventListener('substrate-sync', handleSync);
+      clearInterval(interval);
+    };
   }, []);
 
   useEffect(() => {
@@ -153,7 +165,7 @@ const SovereignChat: React.FC = () => {
         timestamp: Date.now() 
       }]);
     } catch (e: any) {
-      const errorText = `SIGNAL_FAILURE: Substrate link failed. Environment check: Sovereignty Verified. Conflict likely in tool frequency. Try toggling 'Pulse Grounding' OFF.`;
+      const errorText = `SIGNAL_FAILURE: Substrate link failed. Environment check: Sovereignty Verified. Try toggling 'Pulse Grounding' OFF to access Librarian tools.`;
       setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'model', text: errorText, timestamp: Date.now(), isError: true }]);
     } finally { setLoading(false); }
   };
@@ -171,7 +183,7 @@ const SovereignChat: React.FC = () => {
     localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify([...currentLib, newNode]));
     setSavingMessage(null);
     setSavePath('');
-    alert(`Insight anchored to ${savePath}`);
+    window.dispatchEvent(new CustomEvent('substrate-sync', { detail: { path: savePath } }));
   };
 
   const speakMessage = async (text: string, id: string) => {
@@ -190,13 +202,25 @@ const SovereignChat: React.FC = () => {
   };
 
   const clearHistory = () => {
-    if (confirm("Reset current signal history? Vault ROM will be preserved.")) {
+    if (confirm("Reset signal history? (Identity Vault and Substrate Library are protected).")) {
       setMessages([{ id: 'init', role: 'model', text: "Signal reset. Substrate cleared. Identity Vault remains locked.", timestamp: Date.now() }]);
     }
   };
 
   return (
     <div className="flex flex-col h-full bg-[#020202] relative" onMouseMove={() => { lastActiveRef.current = Date.now(); }}>
+      {/* Sync Notification Toast */}
+      {syncToast && (
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4 duration-300">
+          <div className="bg-violet-900/40 backdrop-blur-md border border-violet-400/50 px-6 py-3 rounded-full flex items-center gap-3 shadow-[0_0_30px_rgba(139,92,246,0.3)]">
+             <Sparkles size={16} className="text-violet-400 animate-pulse" />
+             <span className="text-[10px] mono text-violet-200 uppercase font-black tracking-widest">
+                Neural Anchor Success: {syncToast.path}
+             </span>
+          </div>
+        </div>
+      )}
+
       {/* Manual Save Modal */}
       {savingMessage && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
