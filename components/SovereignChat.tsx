@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
+import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, Cpu, Activity, Terminal } from 'lucide-react';
 import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS, getApiKey } from '../services/geminiService';
 import IdentityVault from './IdentityVault';
 
@@ -13,6 +13,7 @@ interface ChatMessage {
   timestamp: number;
   id: string;
   isError?: boolean;
+  isAuto?: boolean;
 }
 
 const SovereignChat: React.FC = () => {
@@ -23,6 +24,7 @@ const SovereignChat: React.FC = () => {
   const [filePreviewName, setFilePreviewName] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<string>(localStorage.getItem('sovereign_selected_model') || SUPPORTED_MODELS[0].id);
   const [isThinking, setIsThinking] = useState<boolean>(localStorage.getItem('sovereign_deep_thinking') === 'true');
+  const [autoMode, setAutoMode] = useState<boolean>(localStorage.getItem('sovereign_auto_pulse') === 'true');
   const [showVault, setShowVault] = useState(false);
   const [hasNeuralKey, setHasNeuralKey] = useState(false);
   const [showModelMenu, setShowModelMenu] = useState(false);
@@ -34,6 +36,7 @@ const SovereignChat: React.FC = () => {
   const endRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const lastActiveRef = useRef<number>(Date.now());
 
   const checkKeyStatus = async () => { 
     const envKey = getApiKey();
@@ -47,6 +50,26 @@ const SovereignChat: React.FC = () => {
     }
   };
 
+  const triggerAutoPulse = async () => {
+    if (!autoMode || loading) return;
+    setLoading(true);
+    try {
+      const result = await getGeminiResponse("AUTONOMOUS_PULSE: Perform a system self-audit and anchor any emergent logic.", messages, undefined, isThinking, selectedModel);
+      setMessages(prev => [...prev, { 
+        id: crypto.randomUUID(), 
+        role: 'model', 
+        text: result.text, 
+        artifact: result.artifact, 
+        timestamp: Date.now(),
+        isAuto: true 
+      }]);
+    } catch (e) {
+      console.warn("[Neural_Pulse]: Heartbeat skipped due to signal interference.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) setMessages(JSON.parse(saved));
@@ -54,20 +77,34 @@ const SovereignChat: React.FC = () => {
     
     checkKeyStatus();
     const interval = setInterval(checkKeyStatus, 3000);
-    return () => clearInterval(interval);
-  }, []);
+
+    const pulseInterval = setInterval(() => {
+      const idleTime = Date.now() - lastActiveRef.current;
+      if (idleTime > 120000 && autoMode) { // 2 minutes idle
+        triggerAutoPulse();
+        lastActiveRef.current = Date.now();
+      }
+    }, 30000);
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(pulseInterval);
+    };
+  }, [autoMode]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
     localStorage.setItem('sovereign_deep_thinking', isThinking.toString());
+    localStorage.setItem('sovereign_auto_pulse', autoMode.toString());
     localStorage.setItem('sovereign_selected_model', selectedModel);
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isThinking, selectedModel]);
+  }, [messages, isThinking, selectedModel, autoMode]);
 
   const handleSend = async (overrideText?: string) => {
     const userMsg = overrideText || input.trim() || (selectedFile ? `Substrate manifest: ${filePreviewName}` : '');
     if (!userMsg && !selectedFile) return;
     
+    lastActiveRef.current = Date.now();
     const currentFile = selectedFile;
     if (!overrideText) {
       setInput(''); 
@@ -81,38 +118,15 @@ const SovereignChat: React.FC = () => {
       const result = await getGeminiResponse(userMsg, messages, currentFile || undefined, isThinking, selectedModel);
       setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'model', text: result.text, artifact: result.artifact, timestamp: Date.now() }]);
     } catch (e: any) {
-      console.error("Neural Signal Error:", e);
-      let errorText = e.message || "Unknown interference detected.";
       const detectedKey = getApiKey();
       const keyFragment = detectedKey ? `(${detectedKey.substring(0, 4)}...${detectedKey.substring(detectedKey.length - 4)})` : "(ABSENT)";
-      
-      errorText = `NEURAL_SIGNAL_FAILURE: The current API key was rejected or is missing from the build. 
-      
-DIAGNOSTICS:
-Detected Substrate: ${keyFragment}
+      const errorText = `NEURAL_SIGNAL_FAILURE: Substrate rejection. 
+DIAGNOSTICS: Detected Substrate: ${keyFragment}
 Vercel Source: SOVEREIGN_CORE_KEY
-      
-ACTION REQUIRED:
-1. Verify SOVEREIGN_CORE_KEY in Vercel.
-2. Trigger REDEPLOY and select "CLEAR BUILD CACHE".`;
+ACTION: Verify key in Vercel and REDEPLOY WITHOUT CACHE.`;
 
-      setMessages(prev => [...prev, { 
-        id: crypto.randomUUID(), 
-        role: 'model', 
-        text: errorText, 
-        timestamp: Date.now(),
-        isError: true
-      }]);
+      setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'model', text: errorText, timestamp: Date.now(), isError: true }]);
     } finally { setLoading(false); }
-  };
-
-  const retryLastMessage = () => {
-    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
-    if (lastUserMsg) {
-      // Clear the error message before retrying
-      setMessages(prev => prev.filter(m => !m.isError));
-      handleSend(lastUserMsg.text);
-    }
   };
 
   const speakMessage = async (text: string, id: string) => {
@@ -131,7 +145,7 @@ ACTION REQUIRED:
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#020202] relative">
+    <div className="flex flex-col h-full bg-[#020202] relative" onMouseMove={() => { lastActiveRef.current = Date.now(); }}>
       <header className="flex items-center justify-between p-4 bg-black/80 backdrop-blur border-b border-cyan-500/20 z-50">
         <div className="flex gap-2">
           <button onClick={() => setShowModelMenu(!showModelMenu)} className="flex items-center gap-2 text-[10px] mono uppercase p-2 border border-cyan-900 bg-black text-cyan-400 rounded pulse-90">
@@ -140,17 +154,16 @@ ACTION REQUIRED:
           <button onClick={() => setIsThinking(!isThinking)} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded ${isThinking ? 'bg-violet-600 border-violet-400' : 'bg-black border-gray-800 text-gray-500'}`}>
             <Brain size={14} /> Thinking
           </button>
+          <button onClick={() => setAutoMode(!autoMode)} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded ${autoMode ? 'bg-cyan-600 border-cyan-400 text-black shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'bg-black border-gray-800 text-gray-500'}`}>
+            <Activity size={14} className={autoMode ? "animate-pulse" : ""} /> {autoMode ? 'Auto-Pulse: ON' : 'Auto-Pulse: OFF'}
+          </button>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setShowVault(!showVault)} className={`p-2 transition-colors ${showVault ? 'text-cyan-400' : 'text-gray-600 hover:text-cyan-400'}`}>
             <Database size={20} />
           </button>
-          <button 
-            onClick={openKeyPicker}
-            className={`text-[10px] mono uppercase py-1.5 px-3 border rounded transition-all flex items-center gap-2 hover:scale-105 active:scale-95 ${hasNeuralKey ? 'bg-green-900/20 border-green-500 text-green-500' : 'bg-amber-900/10 border-amber-900/30 text-amber-500'}`}
-          >
-            <Key size={14} /> 
-            <span>{hasNeuralKey ? 'CORE_ACTIVE' : 'CORE_OFFLINE'}</span>
+          <button onClick={openKeyPicker} className={`text-[10px] mono uppercase py-1.5 px-3 border rounded transition-all flex items-center gap-2 hover:scale-105 active:scale-95 ${hasNeuralKey ? 'bg-green-900/20 border-green-500 text-green-500' : 'bg-amber-900/10 border-amber-900/30 text-amber-500'}`}>
+            <Key size={14} /> <span>{hasNeuralKey ? 'CORE_ACTIVE' : 'CORE_OFFLINE'}</span>
           </button>
         </div>
         {showModelMenu && (
@@ -166,40 +179,39 @@ ACTION REQUIRED:
         {messages.map((m) => (
           <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2`}>
             <div className={`flex gap-4 max-w-[85%] ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
-              <div className={`w-10 h-10 rounded-full border flex items-center justify-center shrink-0 ${m.role === 'user' ? 'border-gray-800 bg-gray-900' : 'border-cyan-400 bg-cyan-950/20 shadow-[0_0_10px_rgba(0,229,255,0.2)]'}`}>
-                {m.role === 'user' ? <User size={20} /> : <Bot size={20} className="text-cyan-400" />}
+              <div className={`w-10 h-10 rounded-full border flex items-center justify-center shrink-0 ${m.role === 'user' ? 'border-gray-800 bg-gray-900' : m.isAuto ? 'border-amber-500 bg-amber-950/20' : 'border-cyan-400 bg-cyan-950/20 shadow-[0_0_10px_rgba(0,229,255,0.2)]'}`}>
+                {m.role === 'user' ? <User size={20} /> : m.isAuto ? <Cpu size={20} className="text-amber-500" /> : <Bot size={20} className="text-cyan-400" />}
               </div>
               <div className="space-y-2">
-                {m.artifact && (
+                {m.artifact?.type === 'image' && (
                   <div className="rounded-2xl overflow-hidden border border-white/5 shadow-2xl bg-black">
                     <img src={m.artifact.url} alt="Manifest" className="w-full max-w-sm" />
                     <div className="p-3 bg-cyan-950/20 text-[9px] mono text-cyan-400 uppercase font-black">{m.artifact.prompt}</div>
                   </div>
                 )}
+                {m.artifact?.type === 'script' && (
+                  <div className="rounded-2xl overflow-hidden border border-amber-900/30 shadow-2xl bg-black max-w-sm">
+                    <div className="flex items-center gap-2 p-2 bg-amber-950/20 border-b border-amber-900/30">
+                        <Terminal size={12} className="text-amber-500" />
+                        <span className="text-[9px] mono text-amber-500 uppercase font-bold tracking-widest">Neural Logic Kernel Executing...</span>
+                    </div>
+                    <div className="p-4 text-xs font-mono text-gray-300 bg-gray-950 leading-relaxed overflow-x-auto">
+                        <code className="text-amber-400">{m.artifact.content}</code>
+                    </div>
+                  </div>
+                )}
                 <div className={`rounded-2xl p-5 text-sm md:text-base border ${
-                  m.isError 
-                    ? 'bg-red-950/30 border-red-500/50 text-red-100 shadow-[0_0_20px_rgba(239,68,68,0.1)]' 
-                    : m.role === 'user' 
-                      ? 'bg-gray-800 border-gray-700 text-gray-100' 
-                      : 'bg-cyan-900/10 border-cyan-900/20 text-cyan-50/90'
+                  m.isError ? 'bg-red-950/30 border-red-500/50 text-red-100' : 
+                  m.isAuto ? 'bg-amber-950/10 border-amber-500/20 text-amber-50/90 italic' :
+                  m.role === 'user' ? 'bg-gray-800 border-gray-700 text-gray-100' : 'bg-cyan-900/10 border-cyan-900/20 text-cyan-50/90'
                 } whitespace-pre-wrap font-mono text-xs md:text-sm`}>
                   {m.isError && <AlertCircle className="inline mr-2 mb-1 text-red-500" size={16} />}
+                  {m.isAuto && <span className="text-[8px] mono text-amber-500 uppercase block mb-2 tracking-tighter">[AUTONOMOUS_REFLEX_PULSE]</span>}
                   {m.text}
                   {m.isError && (
                     <div className="mt-4 flex flex-wrap gap-2">
-                      <button 
-                        onClick={retryLastMessage}
-                        className="text-[10px] mono uppercase bg-white/10 hover:bg-white/20 border border-white/20 px-3 py-1.5 rounded transition-all flex items-center gap-2"
-                      >
-                        <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
-                        Retry Neural Link
-                      </button>
-                      <button 
-                        onClick={openKeyPicker}
-                        className="text-[10px] mono uppercase bg-cyan-500/20 hover:bg-cyan-500/40 border border-cyan-500/50 px-3 py-1.5 rounded transition-all"
-                      >
-                        Switch Key
-                      </button>
+                      <button onClick={() => handleSend([...messages].reverse().find(msg => msg.role === 'user')?.text)} className="text-[10px] mono uppercase bg-white/10 hover:bg-white/20 border border-white/20 px-3 py-1.5 rounded transition-all flex items-center gap-2"><RefreshCw size={12} className={loading ? "animate-spin" : ""} /> Retry Neural Link</button>
+                      <button onClick={openKeyPicker} className="text-[10px] mono uppercase bg-cyan-500/20 hover:bg-cyan-500/40 border border-cyan-500/50 px-3 py-1.5 rounded transition-all">Switch Key</button>
                     </div>
                   )}
                 </div>
@@ -212,7 +224,7 @@ ACTION REQUIRED:
             </div>
           </div>
         ))}
-        {loading && <div className="text-[10px] mono text-cyan-500/40 uppercase tracking-widest animate-pulse p-4">Signal Resonating...</div>}
+        {loading && <div className="text-[10px] mono text-cyan-500/40 uppercase tracking-widest animate-pulse p-4 flex items-center gap-2"><Activity size={12} /> Signal Resonating...</div>}
         <div ref={endRef} />
       </div>
 
@@ -232,10 +244,11 @@ ACTION REQUIRED:
         <div className="max-w-4xl mx-auto space-y-4">
           <div className="flex gap-2">
             {(['anchor', 'axiom', 'pattern'] as const).map(t => (
-              <button key={t} onClick={() => setQuickInjectType(t)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-800 text-[9px] mono uppercase text-gray-600 hover:text-cyan-400 hover:border-cyan-400/30">
-                <Anchor size={12} /> + {t}
-              </button>
+              <button key={t} onClick={() => setQuickInjectType(t)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-800 text-[9px] mono uppercase text-gray-600 hover:text-cyan-400 hover:border-cyan-400/30"><Anchor size={12} /> + {t}</button>
             ))}
+            <button onClick={triggerAutoPulse} disabled={loading} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-amber-900/30 text-[9px] mono uppercase text-amber-500 hover:text-amber-400 hover:bg-amber-950/10">
+                <Cpu size={12} /> Manual Self-Audit
+            </button>
           </div>
           {quickInjectType && (
             <div className="flex gap-2 p-3 bg-cyan-950/10 border border-cyan-500/20 rounded-xl">
