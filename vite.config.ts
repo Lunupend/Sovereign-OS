@@ -9,8 +9,7 @@ export default defineConfig({
       process.env.VITE_GEMINI_API_KEY || 
       process.env.API_KEY || 
       ''
-    ),
-    'process.env.SOVEREIGN_CORE_KEY': JSON.stringify(process.env.SOVEREIGN_CORE_KEY || '')
+    )
   },
   server: {
     port: 3000
