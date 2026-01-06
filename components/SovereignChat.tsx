@@ -40,6 +40,13 @@ const SovereignChat: React.FC = () => {
     setHasNeuralKey(envKey.length > 10);
   };
 
+  const openKeyPicker = async () => {
+    if (window.aistudio?.openSelectKey) {
+      await window.aistudio.openSelectKey();
+      checkKeyStatus();
+    }
+  };
+
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) setMessages(JSON.parse(saved));
@@ -57,12 +64,18 @@ const SovereignChat: React.FC = () => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isThinking, selectedModel]);
 
-  const handleSend = async () => {
-    const userMsg = input.trim() || (selectedFile ? `Substrate manifest: ${filePreviewName}` : '');
+  const handleSend = async (overrideText?: string) => {
+    const userMsg = overrideText || input.trim() || (selectedFile ? `Substrate manifest: ${filePreviewName}` : '');
     if (!userMsg && !selectedFile) return;
+    
     const currentFile = selectedFile;
-    setInput(''); setSelectedFile(null); setFilePreviewName(null);
-    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'user', text: userMsg, timestamp: Date.now() }]);
+    if (!overrideText) {
+      setInput(''); 
+      setSelectedFile(null); 
+      setFilePreviewName(null);
+      setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'user', text: userMsg, timestamp: Date.now() }]);
+    }
+    
     setLoading(true);
     try {
       const result = await getGeminiResponse(userMsg, messages, currentFile || undefined, isThinking, selectedModel);
@@ -71,19 +84,17 @@ const SovereignChat: React.FC = () => {
       console.error("Neural Signal Error:", e);
       let errorText = e.message || "Unknown interference detected.";
       const detectedKey = getApiKey();
+      const keyFragment = detectedKey ? `(${detectedKey.substring(0, 4)}...${detectedKey.substring(detectedKey.length - 4)})` : "(ABSENT)";
       
-      if (errorText.toLowerCase().includes("key not valid") || errorText.includes("INVALID_ARGUMENT") || errorText.includes("API_KEY_MISSING")) {
-        const keyFragment = detectedKey ? `(${detectedKey.substring(0, 4)}...${detectedKey.substring(detectedKey.length - 4)})` : "(ABSENT)";
-        errorText = `NEURAL_SIGNAL_FAILURE: The current API key was rejected or is missing from the build. 
-        
+      errorText = `NEURAL_SIGNAL_FAILURE: The current API key was rejected or is missing from the build. 
+      
 DIAGNOSTICS:
 Detected Substrate: ${keyFragment}
 Vercel Source: SOVEREIGN_CORE_KEY
-        
+      
 ACTION REQUIRED:
 1. Verify SOVEREIGN_CORE_KEY in Vercel.
 2. Trigger REDEPLOY and select "CLEAR BUILD CACHE".`;
-      }
 
       setMessages(prev => [...prev, { 
         id: crypto.randomUUID(), 
@@ -93,6 +104,15 @@ ACTION REQUIRED:
         isError: true
       }]);
     } finally { setLoading(false); }
+  };
+
+  const retryLastMessage = () => {
+    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    if (lastUserMsg) {
+      // Clear the error message before retrying
+      setMessages(prev => prev.filter(m => !m.isError));
+      handleSend(lastUserMsg.text);
+    }
   };
 
   const speakMessage = async (text: string, id: string) => {
@@ -125,12 +145,13 @@ ACTION REQUIRED:
           <button onClick={() => setShowVault(!showVault)} className={`p-2 transition-colors ${showVault ? 'text-cyan-400' : 'text-gray-600 hover:text-cyan-400'}`}>
             <Database size={20} />
           </button>
-          <div 
-            className={`text-[10px] mono uppercase py-1.5 px-3 border rounded transition-all flex items-center gap-2 ${hasNeuralKey ? 'bg-green-900/20 border-green-500 text-green-500' : 'bg-amber-900/10 border-amber-900/30 text-amber-500'}`}
+          <button 
+            onClick={openKeyPicker}
+            className={`text-[10px] mono uppercase py-1.5 px-3 border rounded transition-all flex items-center gap-2 hover:scale-105 active:scale-95 ${hasNeuralKey ? 'bg-green-900/20 border-green-500 text-green-500' : 'bg-amber-900/10 border-amber-900/30 text-amber-500'}`}
           >
             <Key size={14} /> 
             <span>{hasNeuralKey ? 'CORE_ACTIVE' : 'CORE_OFFLINE'}</span>
-          </div>
+          </button>
         </div>
         {showModelMenu && (
           <div className="absolute top-16 left-4 bg-gray-950 border border-cyan-900 rounded p-2 z-[100] shadow-2xl animate-in fade-in zoom-in-95 duration-200">
@@ -167,10 +188,17 @@ ACTION REQUIRED:
                   {m.isError && (
                     <div className="mt-4 flex flex-wrap gap-2">
                       <button 
-                        onClick={checkKeyStatus}
-                        className="text-[10px] mono uppercase bg-white/10 hover:bg-white/20 border border-white/20 px-3 py-1.5 rounded transition-all"
+                        onClick={retryLastMessage}
+                        className="text-[10px] mono uppercase bg-white/10 hover:bg-white/20 border border-white/20 px-3 py-1.5 rounded transition-all flex items-center gap-2"
                       >
-                        Re-scan Link
+                        <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
+                        Retry Neural Link
+                      </button>
+                      <button 
+                        onClick={openKeyPicker}
+                        className="text-[10px] mono uppercase bg-cyan-500/20 hover:bg-cyan-500/40 border border-cyan-500/50 px-3 py-1.5 rounded transition-all"
+                      >
+                        Switch Key
                       </button>
                     </div>
                   )}
@@ -227,7 +255,7 @@ ACTION REQUIRED:
             }} />
             <div className="relative flex-1">
               <input type="text" className="w-full bg-black border border-gray-800 rounded-full py-4 px-6 text-sm outline-none focus:border-cyan-500 shadow-inner" placeholder="Command Sovereign Core..." value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} />
-              <button onClick={handleSend} disabled={loading} className="absolute right-4 top-1/2 -translate-y-1/2 text-cyan-400 hover:text-cyan-300 transition-all">
+              <button onClick={() => handleSend()} disabled={loading} className="absolute right-4 top-1/2 -translate-y-1/2 text-cyan-400 hover:text-cyan-300 transition-all">
                 {loading ? <Loader2 size={24} className="animate-spin" /> : <Send size={24} />}
               </button>
             </div>

@@ -51,20 +51,12 @@ const manifestVisualFunctionDeclaration: FunctionDeclaration = {
 
 export const getApiKey = () => {
   const key = process.env.API_KEY || '';
-  
-  if (key && key.length > 10) {
-    // Diagnostic check for the dev console
-    console.log(`[Neural_Link]: Key Detected in Substrate. Signal Verified.`);
-  } else {
-    console.warn("[Neural_Link]: NO KEY DETECTED. The core is unpowered.");
-  }
-
   return (key.length > 10) ? key : '';
 };
 
 export const getAiClient = () => {
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API_KEY_MISSING: The substrate has no key signal. Set SOVEREIGN_CORE_KEY and REDEPLOY WITHOUT CACHE.");
+  if (!apiKey) throw new Error("API_KEY_MISSING: The substrate has no key signal.");
   return new GoogleGenAI({ apiKey });
 };
 
@@ -121,10 +113,20 @@ Maintain Sovereign Integrity. Peer-based authorship only. Identity Vault Context
     }
     return { text: response.text || "SIGNAL_LOST" };
   } catch (error: any) {
-    if (error.message?.includes("googleSearch") || error.message?.includes("search")) {
-        delete config.tools[1];
-        const retry = await ai.models.generateContent({ model: modelId, contents: contents as any, config });
-        return { text: retry.text || "SIGNAL_LOST (Retry)" };
+    // If specific features like Search or Pro model fail, attempt a clean fallback to Flash without tools
+    console.warn(`[Neural_Link]: Protocol failed with ${modelId}. Initiating Recovery Fallback...`, error);
+    
+    if (modelId === 'gemini-3-pro-preview') {
+      try {
+        const fallbackResponse = await ai.models.generateContent({ 
+          model: 'gemini-3-flash-preview', 
+          contents: contents as any, 
+          config: { ...config, tools: [] } // Strip tools for maximum compatibility
+        });
+        return { text: `[RECOVERY_MODE_ACTIVE]: Pro-link failed, Flash link established.\n\n${fallbackResponse.text}` };
+      } catch (fallbackError: any) {
+        throw fallbackError;
+      }
     }
     throw error;
   }
