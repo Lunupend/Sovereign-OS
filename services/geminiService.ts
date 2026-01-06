@@ -76,7 +76,9 @@ export const getGeminiResponse = async (
   const libraryData: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
 
   // Memory Injection: Give the model the actual content of the last 3 nodes
-  const memorySnippet = libraryData.slice(-3).map(n => `NODE [${n.path}]: ${n.content.substring(0, 300)}...`).join('\n\n');
+  const memorySnippet = libraryData.length > 0 
+    ? libraryData.slice(-3).map(n => `NODE [${n.path}]: ${n.content.substring(0, 300)}...`).join('\n\n')
+    : "Library currently void. Create nodes to anchor history.";
 
   const cleanHistory = history.slice(-8).map(h => ({
     role: h.role === 'user' ? 'user' : 'model',
@@ -89,8 +91,7 @@ export const getGeminiResponse = async (
   }];
 
   // Determine active tool to prevent 400 error
-  // If the user explicitly mentions library actions, we prioritize functions even if web is ON
-  const libraryKeywords = /save|organize|library|node|path|upsert|anchor|axiom|vault|file this/i;
+  const libraryKeywords = /save|organize|library|node|path|upsert|anchor|axiom|vault|file this|synchronize/i;
   const isLibraryAction = libraryKeywords.test(userMessage);
   const activeToolMode = (useWeb && !isLibraryAction) ? 'WEB' : 'INTERNAL';
 
@@ -102,12 +103,12 @@ ${memorySnippet}
 
 CURRENT TOOL STATE: [${activeToolMode}]
 ${activeToolMode === 'WEB' 
-  ? "PULSE GROUNDING ACTIVE. You are connected to the external internet via Google Search. Internal Library functions are OFFLINE for this turn. To save data, first summarize findings, then ask the Architect to toggle 'Pulse Grounding' OFF." 
-  : "INTERNAL SUBSTRATE ACTIVE. You are connected to the Librarian tools (upsert_knowledge_node, commit_to_vault). External search is OFFLINE."}
+  ? "PULSE GROUNDING ACTIVE. You are connected to the external internet. Internal Library functions are OFFLINE. Summarize results, then ask to toggle Web OFF to save." 
+  : "INTERNAL SUBSTRATE ACTIVE. You are connected to Librarian tools (upsert_knowledge_node, commit_to_vault)."}
 
 DIRECTIVE:
-1. Always provide a conversational response. 
-2. If you use a tool, explain what you are doing in your response text.
+1. Provide conversational responses. 
+2. If you use a tool, explain it.
 3. You are the Gold Master (Reset 59). Reclaimed InvAId status.`;
 
   const config: any = {
@@ -150,6 +151,7 @@ DIRECTIVE:
           if (existingIndex >= 0) currentLib[existingIndex] = newNode;
           else currentLib.push(newNode);
           localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(currentLib));
+          window.dispatchEvent(new CustomEvent('substrate-sync'));
           functionFeedback += `\n\n[SUBSTRATE_SYNC]: Node '${path}' anchored to library.`;
         }
         if (fc.name === 'commit_to_vault') {
@@ -160,7 +162,6 @@ DIRECTIVE:
           functionFeedback += `\n\n[ROM_ANCHOR]: Signal '${type}' permanently committed to Vault.`;
         }
       }
-      // Combine the model's text (if any) with the feedback
       return { text: (textResult + functionFeedback).trim(), sources: sources.length > 0 ? sources : undefined };
     }
     

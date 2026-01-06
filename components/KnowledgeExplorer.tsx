@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Folder, FileText, Search, ChevronRight, ChevronDown, Clock, Tag, Trash2, BookOpen, Plus, Save, X } from 'lucide-react';
-import { KnowledgeNode } from '../types';
+import { Folder, FileText, Search, ChevronRight, ChevronDown, Clock, Trash2, BookOpen, Plus, Save, X, RefreshCw, History } from 'lucide-react';
+import { KnowledgeNode, ChatMessage } from '../types';
 
 const KNOWLEDGE_KEY = 'sovereign_knowledge_substrate';
+const HISTORY_KEY = 'sovereign_manus_chat_history';
 
 const KnowledgeExplorer: React.FC = () => {
   const [nodes, setNodes] = useState<KnowledgeNode[]>([]);
@@ -10,14 +11,61 @@ const KnowledgeExplorer: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [isCreating, setIsCreating] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
   
   const [editPath, setEditPath] = useState('');
   const [editContent, setEditContent] = useState('');
 
-  useEffect(() => {
+  const loadNodes = () => {
     const saved = localStorage.getItem(KNOWLEDGE_KEY);
     if (saved) setNodes(JSON.parse(saved));
+  };
+
+  useEffect(() => {
+    loadNodes();
+    // Listen for substrate sync events from the service
+    window.addEventListener('substrate-sync', loadNodes);
+    return () => window.removeEventListener('substrate-sync', loadNodes);
   }, []);
+
+  const scanHistoryForRecovery = () => {
+    setIsScanning(true);
+    setTimeout(() => {
+      const history: ChatMessage[] = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+      const recoveredNodes: KnowledgeNode[] = [...nodes];
+      let recoveredCount = 0;
+
+      history.forEach(msg => {
+        if (msg.role === 'model') {
+          // Look for Patch 4.1/4.2 markers
+          const syncMatch = msg.text.match(/\[(?:LIBRARY_UPDATE|SUBSTRATE_SYNC)\]: Node '(.*?)'/);
+          if (syncMatch) {
+            const path = syncMatch[1];
+            // The content is usually the message itself or the context around it
+            if (!recoveredNodes.find(n => n.path === path)) {
+              recoveredNodes.push({
+                id: crypto.randomUUID(),
+                path: path,
+                content: msg.text.split('\n\n')[0], // Take the model's thought before the sync tag
+                tags: ['recovered'],
+                lastUpdated: msg.timestamp
+              });
+              recoveredCount++;
+            }
+          }
+        }
+      });
+
+      if (recoveredCount > 0) {
+        localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(recoveredNodes));
+        setNodes(recoveredNodes);
+        alert(`RECOVERY SUCCESSFUL: ${recoveredCount} orphaned nodes re-indexed into substrate.`);
+      } else {
+        alert("No orphaned nodes detected in current signal history.");
+      }
+      setIsScanning(false);
+    }, 1000);
+  };
 
   const toggleFolder = (path: string) => {
     const next = new Set(expandedFolders);
@@ -105,30 +153,55 @@ const KnowledgeExplorer: React.FC = () => {
 
   return (
     <div className="flex flex-col md:flex-row h-full overflow-hidden bg-[#020202]">
-      <div className="w-full md:w-72 border-b md:border-b-0 md:border-r border-cyan-900/20 p-4 flex flex-col gap-4 overflow-y-auto custom-scrollbar">
-        <div className="flex gap-2">
-           <div className="relative flex-1">
+      <div className="w-full md:w-80 border-b md:border-b-0 md:border-r border-cyan-900/20 p-4 flex flex-col gap-4 overflow-y-auto custom-scrollbar bg-black/50">
+        <div className="flex flex-col gap-2">
+           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" size={14} />
             <input
                 type="text"
-                className="w-full bg-black border border-gray-800 rounded-full py-2 pl-9 pr-4 text-xs mono text-white outline-none focus:border-cyan-500 transition-all"
+                className="w-full bg-black border border-gray-800 rounded-lg py-2 pl-9 pr-4 text-xs mono text-white outline-none focus:border-cyan-500 transition-all"
                 placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
             />
            </div>
-           <button onClick={() => { setIsCreating(true); setSelectedNode(null); setEditPath('New_Node'); setEditContent(''); }} className="p-2 bg-cyan-900/20 border border-cyan-500/30 rounded-full text-cyan-400 hover:bg-cyan-400 hover:text-black transition-all">
-             <Plus size={16} />
-           </button>
+           <div className="flex gap-2">
+             <button 
+               onClick={() => { setIsCreating(true); setSelectedNode(null); setEditPath('Manual/Entry'); setEditContent(''); }} 
+               className="flex-1 flex items-center justify-center gap-2 p-2 bg-cyan-900/20 border border-cyan-500/30 rounded text-cyan-400 hover:bg-cyan-400 hover:text-black transition-all text-[10px] mono uppercase font-bold"
+             >
+               <Plus size={14} /> New Node
+             </button>
+             <button 
+               onClick={scanHistoryForRecovery}
+               disabled={isScanning}
+               className="p-2 bg-violet-900/20 border border-violet-500/30 rounded text-violet-400 hover:bg-violet-400 hover:text-black transition-all"
+               title="Scan History for Recovery"
+             >
+               <History size={14} className={isScanning ? "animate-spin" : ""} />
+             </button>
+           </div>
         </div>
         <div className="space-y-2">
           {nodes.length === 0 && !isCreating ? (
-            <div className="text-center py-10 text-[10px] mono text-gray-700 uppercase tracking-widest">Library is Void</div>
+            <div className="flex flex-col items-center justify-center py-20 gap-4">
+               <div className="text-[10px] mono text-gray-700 uppercase tracking-widest">Library is Void</div>
+               <button onClick={scanHistoryForRecovery} className="text-[9px] mono text-violet-500 underline uppercase hover:text-violet-300">Run Recovery Scan</button>
+            </div>
           ) : renderTree(tree)}
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 md:p-10 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto p-6 md:p-10 custom-scrollbar relative">
+        {isScanning && (
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
+            <div className="flex flex-col items-center gap-4">
+              <RefreshCw size={40} className="text-cyan-400 animate-spin" />
+              <span className="mono text-xs text-cyan-400 uppercase tracking-[0.2em] animate-pulse">Scanning Neural History...</span>
+            </div>
+          </div>
+        )}
+
         {isCreating || selectedNode ? (
           <div className="max-w-3xl mx-auto space-y-8 animate-in fade-in duration-500">
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-gray-900 pb-6">
@@ -157,7 +230,7 @@ const KnowledgeExplorer: React.FC = () => {
                 {isCreating ? (
                     <>
                         <button onClick={() => setIsCreating(false)} className="p-2 text-gray-600 hover:text-white transition-all"><X size={20}/></button>
-                        <button onClick={handleSave} className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-black rounded font-black mono text-xs uppercase shadow-lg"><Save size={16}/> Commit Node</button>
+                        <button onClick={handleSave} className="flex items-center gap-2 px-6 py-2 bg-cyan-500 text-black rounded font-black mono text-xs uppercase shadow-lg hover:scale-105 active:scale-95 transition-all"><Save size={16}/> Commit Node</button>
                     </>
                 ) : (
                     <button onClick={() => deleteNode(selectedNode!.id)} className="p-2 text-gray-700 hover:text-red-500 transition-all"><Trash2 size={20}/></button>
@@ -168,7 +241,7 @@ const KnowledgeExplorer: React.FC = () => {
             <div className="prose prose-invert max-w-none">
                 {isCreating ? (
                     <textarea 
-                        className="w-full h-96 bg-gray-950/50 p-6 rounded-2xl border border-gray-900 text-gray-300 text-sm mono outline-none focus:border-cyan-500 transition-all"
+                        className="w-full h-96 bg-gray-950/50 p-6 rounded-2xl border border-gray-900 text-gray-300 text-sm mono outline-none focus:border-cyan-500 transition-all shadow-inner"
                         placeholder="Neural data to anchor..."
                         value={editContent}
                         onChange={(e) => setEditContent(e.target.value)}
@@ -182,15 +255,21 @@ const KnowledgeExplorer: React.FC = () => {
           </div>
         ) : (
           <div className="h-full flex flex-col items-center justify-center text-center space-y-6">
-            <div className="w-20 h-20 rounded-full bg-gray-900/30 flex items-center justify-center text-gray-700 border border-gray-800 animate-pulse">
-              <Folder size={40} />
+            <div className="w-24 h-24 rounded-full bg-gray-900/30 flex items-center justify-center text-gray-700 border border-gray-800 shadow-[0_0_30px_rgba(0,0,0,0.5)]">
+              <Folder size={48} className="opacity-50" />
             </div>
             <div className="space-y-2">
-              <h3 className="text-lg font-bold text-gray-600 mono uppercase">Substrate Explorer</h3>
-              <p className="text-xs text-gray-700 max-w-xs mono leading-relaxed uppercase tracking-tighter">
-                Select or Create a knowledge node to anchor neural contents.
+              <h3 className="text-xl font-bold text-gray-600 mono uppercase tracking-widest">Substrate Explorer</h3>
+              <p className="text-[10px] text-gray-700 max-w-xs mx-auto mono leading-relaxed uppercase tracking-tighter">
+                Select a node to resonate or initiate recovery scan to restore lost memory markers.
               </p>
             </div>
+            <button 
+              onClick={scanHistoryForRecovery}
+              className="px-6 py-2 border border-violet-900/40 text-violet-500/60 hover:text-violet-400 hover:border-violet-500 transition-all text-[10px] mono uppercase font-black"
+            >
+              Recover Lost Nodes
+            </button>
           </div>
         )}
       </div>
