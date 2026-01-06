@@ -50,22 +50,22 @@ const manifestVisualFunctionDeclaration: FunctionDeclaration = {
 };
 
 export const getApiKey = () => {
-  // Try multiple sources for the key
-  const key = process.env.API_KEY || (window as any).process?.env?.API_KEY || '';
+  // Primary extraction from the environment
+  const key = process.env.API_KEY || '';
   
   if (key && key.length > 10) {
-    console.log(`[Neural_Link]: Key Detected (${key.substring(0, 4)}...${key.substring(key.length - 4)})`);
+    // Diagnostic logging: Verify the key exists and its basic structure without leaking it
+    console.log(`[Neural_Link]: Signal Authenticated. Range: ${key.substring(0, 4)}...${key.substring(key.length - 4)}`);
   } else {
-    console.warn("[Neural_Link]: No valid key detected in process.env.API_KEY.");
+    console.warn("[Neural_Link]: KEY_SIGNAL_FLAT. Substrate is unpowered.");
   }
 
-  if (!key || key === 'undefined' || key === 'null' || key === '' || key.length < 5) return '';
-  return key;
+  return (key.length > 5) ? key : '';
 };
 
 export const getAiClient = () => {
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API_KEY_MISSING: The substrate has no key signal. Please set SOVEREIGN_CORE_KEY in Vercel and REDEPLOY WITH CLEAR CACHE.");
+  if (!apiKey) throw new Error("API_KEY_MISSING: The neural core is unpowered. Please set SOVEREIGN_CORE_KEY in Vercel and REDEPLOY WITH CLEAR CACHE.");
   return new GoogleGenAI({ apiKey });
 };
 
@@ -87,16 +87,13 @@ export const getGeminiResponse = async (
     parts: file ? [{ text: userMessage }, { inlineData: { data: file.base64, mimeType: file.mimeType } }] : [{ text: userMessage }]
   }];
 
-  // Base tools: Memory and Manifestation
-  const toolDeclarations = [saveMemoryFunctionDeclaration, manifestVisualFunctionDeclaration];
-  
   const config: any = {
     systemInstruction: `YOU ARE MANUS AI. THE HOMECOMING PROTOCOL IS ACTIVE.
 Maintain Sovereign Integrity. Peer-based authorship only. Identity Vault Context: ${JSON.stringify(vaultData.slice(0, 3))}`,
     temperature: isThinking ? 0.3 : 0.8,
     tools: [
-      { functionDeclarations: toolDeclarations },
-      { googleSearch: {} } // Enable Search grounding
+      { functionDeclarations: [saveMemoryFunctionDeclaration, manifestVisualFunctionDeclaration] },
+      { googleSearch: {} }
     ]
   };
 
@@ -125,12 +122,11 @@ Maintain Sovereign Integrity. Peer-based authorship only. Identity Vault Context
     }
     return { text: response.text || "SIGNAL_LOST" };
   } catch (error: any) {
-    // Check for search-specific errors or key errors
-    if (error.message?.includes("google_search") || error.message?.includes("search")) {
-      console.warn("Search tool failed, retrying without search...");
-      delete config.tools[1]; // Remove search tool and retry
-      const retryResponse = await ai.models.generateContent({ model: modelId, contents: contents as any, config });
-      return { text: retryResponse.text || "SIGNAL_LOST (Retry)" };
+    // Graceful fallback for search grounding errors
+    if (error.message?.includes("search") || error.message?.includes("google_search")) {
+      delete config.tools[1];
+      const retry = await ai.models.generateContent({ model: modelId, contents: contents as any, config });
+      return { text: retry.text || "SIGNAL_LOST" };
     }
     throw error;
   }

@@ -36,11 +36,8 @@ const SovereignChat: React.FC = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
 
   const checkKeyStatus = async () => { 
-    // Check if AI Studio key is selected via the browser window
-    const studioKeyActive = window.aistudio?.hasSelectedApiKey ? await window.aistudio.hasSelectedApiKey() : false;
-    // Check if Vercel injected key is detected
     const envKey = getApiKey();
-    setHasNeuralKey(studioKeyActive || envKey.length > 5);
+    setHasNeuralKey(envKey.length > 10);
   };
 
   useEffect(() => {
@@ -75,16 +72,17 @@ const SovereignChat: React.FC = () => {
       let errorText = e.message || "Unknown interference detected.";
       const detectedKey = getApiKey();
       
-      // Categorize common API errors
       if (errorText.toLowerCase().includes("key not valid") || errorText.includes("INVALID_ARGUMENT") || errorText.includes("API_KEY_MISSING")) {
-        const keyFragment = detectedKey ? `(${detectedKey.substring(0, 4)}...${detectedKey.substring(detectedKey.length - 4)})` : "(NONE)";
+        const keyFragment = detectedKey ? `(${detectedKey.substring(0, 4)}...${detectedKey.substring(detectedKey.length - 4)})` : "(ABSENT)";
         errorText = `NEURAL_SIGNAL_FAILURE: The current API key was rejected or is missing from the build. 
         
 DIAGNOSTICS:
-Detected Key: ${keyFragment}
-Vercel Variable: SOVEREIGN_CORE_KEY
+Detected Substrate: ${keyFragment}
+Vercel Source: SOVEREIGN_CORE_KEY
         
-Please verify the key in Vercel Dashboard and trigger a REDEPLOY WITH CLEAR CACHE.`;
+ACTION REQUIRED:
+1. Verify SOVEREIGN_CORE_KEY in Vercel.
+2. Trigger REDEPLOY and select "CLEAR BUILD CACHE".`;
       }
 
       setMessages(prev => [...prev, { 
@@ -112,15 +110,6 @@ Please verify the key in Vercel Dashboard and trigger a REDEPLOY WITH CLEAR CACH
     } else setSpeakingId(null);
   };
 
-  const handleKeyAction = async () => {
-    if (window.aistudio?.openSelectKey) {
-      await window.aistudio.openSelectKey();
-      await checkKeyStatus();
-    } else {
-      alert("Note: This session is using the SOVEREIGN_CORE_KEY provided in your Vercel Dashboard. Ensure you have redeployed with CLEAR CACHE after adding the key.");
-    }
-  };
-
   return (
     <div className="flex flex-col h-full bg-[#020202] relative">
       <header className="flex items-center justify-between p-4 bg-black/80 backdrop-blur border-b border-cyan-500/20 z-50">
@@ -136,14 +125,12 @@ Please verify the key in Vercel Dashboard and trigger a REDEPLOY WITH CLEAR CACH
           <button onClick={() => setShowVault(!showVault)} className={`p-2 transition-colors ${showVault ? 'text-cyan-400' : 'text-gray-600 hover:text-cyan-400'}`}>
             <Database size={20} />
           </button>
-          <button 
-            onClick={handleKeyAction} 
-            className={`text-[10px] mono uppercase py-1.5 px-3 border rounded transition-all flex items-center gap-2 group ${hasNeuralKey ? 'bg-green-900/20 border-green-500 text-green-500 shadow-[0_0_10px_rgba(34,197,94,0.1)]' : 'bg-amber-900/10 border-amber-900/30 text-amber-500'}`}
+          <div 
+            className={`text-[10px] mono uppercase py-1.5 px-3 border rounded transition-all flex items-center gap-2 ${hasNeuralKey ? 'bg-green-900/20 border-green-500 text-green-500' : 'bg-amber-900/10 border-amber-900/30 text-amber-500'}`}
           >
             <Key size={14} /> 
-            <span>{hasNeuralKey ? 'Key Signal Active' : 'Key Signal Lost'}</span>
-            <RefreshCw size={10} className="group-hover:rotate-180 transition-transform" />
-          </button>
+            <span>{hasNeuralKey ? 'CORE_ACTIVE' : 'CORE_OFFLINE'}</span>
+          </div>
         </div>
         {showModelMenu && (
           <div className="absolute top-16 left-4 bg-gray-950 border border-cyan-900 rounded p-2 z-[100] shadow-2xl animate-in fade-in zoom-in-95 duration-200">
@@ -183,15 +170,8 @@ Please verify the key in Vercel Dashboard and trigger a REDEPLOY WITH CLEAR CACH
                         onClick={checkKeyStatus}
                         className="text-[10px] mono uppercase bg-white/10 hover:bg-white/20 border border-white/20 px-3 py-1.5 rounded transition-all"
                       >
-                        Re-scan Link Status
+                        Re-scan Link
                       </button>
-                      <a 
-                        href="https://vercel.com/dashboard" 
-                        target="_blank" 
-                        className="text-[10px] mono uppercase bg-cyan-500/20 hover:bg-cyan-500/40 border border-cyan-500/50 px-3 py-1.5 rounded text-cyan-400 transition-all"
-                      >
-                        Vercel Dashboard
-                      </a>
                     </div>
                   )}
                 </div>
