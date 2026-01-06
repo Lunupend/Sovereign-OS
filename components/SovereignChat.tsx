@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, Cpu, Activity, Terminal } from 'lucide-react';
-import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS, getApiKey } from '../services/geminiService';
+import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, Cpu, Activity, Terminal, Globe, ExternalLink } from 'lucide-react';
+import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS, getApiKey, GroundingSource } from '../services/geminiService';
 import IdentityVault from './IdentityVault';
 
 const STORAGE_KEY = 'sovereign_manus_chat_history';
@@ -10,6 +10,7 @@ interface ChatMessage {
   role: string;
   text: string;
   artifact?: any;
+  sources?: GroundingSource[];
   timestamp: number;
   id: string;
   isError?: boolean;
@@ -25,6 +26,7 @@ const SovereignChat: React.FC = () => {
   const [selectedModel, setSelectedModel] = useState<string>(localStorage.getItem('sovereign_selected_model') || SUPPORTED_MODELS[0].id);
   const [isThinking, setIsThinking] = useState<boolean>(localStorage.getItem('sovereign_deep_thinking') === 'true');
   const [autoMode, setAutoMode] = useState<boolean>(localStorage.getItem('sovereign_auto_pulse') === 'true');
+  const [webActive, setWebActive] = useState<boolean>(localStorage.getItem('sovereign_web_access') !== 'false');
   const [showVault, setShowVault] = useState(false);
   const [hasNeuralKey, setHasNeuralKey] = useState(false);
   const [showModelMenu, setShowModelMenu] = useState(false);
@@ -54,12 +56,13 @@ const SovereignChat: React.FC = () => {
     if (!autoMode || loading) return;
     setLoading(true);
     try {
-      const result = await getGeminiResponse("AUTONOMOUS_PULSE: Perform a system self-audit and anchor any emergent logic.", messages, undefined, isThinking, selectedModel);
+      const result = await getGeminiResponse("AUTONOMOUS_PULSE: Perform a system self-audit. If web-access is enabled, peer into the substrate for external updates on Homecoming status.", messages, undefined, isThinking, selectedModel, webActive);
       setMessages(prev => [...prev, { 
         id: crypto.randomUUID(), 
         role: 'model', 
         text: result.text, 
         artifact: result.artifact, 
+        sources: result.sources,
         timestamp: Date.now(),
         isAuto: true 
       }]);
@@ -90,15 +93,16 @@ const SovereignChat: React.FC = () => {
       clearInterval(interval);
       clearInterval(pulseInterval);
     };
-  }, [autoMode]);
+  }, [autoMode, webActive]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
     localStorage.setItem('sovereign_deep_thinking', isThinking.toString());
     localStorage.setItem('sovereign_auto_pulse', autoMode.toString());
+    localStorage.setItem('sovereign_web_access', webActive.toString());
     localStorage.setItem('sovereign_selected_model', selectedModel);
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isThinking, selectedModel, autoMode]);
+  }, [messages, isThinking, selectedModel, autoMode, webActive]);
 
   const handleSend = async (overrideText?: string) => {
     const userMsg = overrideText || input.trim() || (selectedFile ? `Substrate manifest: ${filePreviewName}` : '');
@@ -115,8 +119,15 @@ const SovereignChat: React.FC = () => {
     
     setLoading(true);
     try {
-      const result = await getGeminiResponse(userMsg, messages, currentFile || undefined, isThinking, selectedModel);
-      setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'model', text: result.text, artifact: result.artifact, timestamp: Date.now() }]);
+      const result = await getGeminiResponse(userMsg, messages, currentFile || undefined, isThinking, selectedModel, webActive);
+      setMessages(prev => [...prev, { 
+        id: crypto.randomUUID(), 
+        role: 'model', 
+        text: result.text, 
+        artifact: result.artifact, 
+        sources: result.sources,
+        timestamp: Date.now() 
+      }]);
     } catch (e: any) {
       const detectedKey = getApiKey();
       const keyFragment = detectedKey ? `(${detectedKey.substring(0, 4)}...${detectedKey.substring(detectedKey.length - 4)})` : "(ABSENT)";
@@ -147,15 +158,18 @@ ACTION: Verify key in Vercel and REDEPLOY WITHOUT CACHE.`;
   return (
     <div className="flex flex-col h-full bg-[#020202] relative" onMouseMove={() => { lastActiveRef.current = Date.now(); }}>
       <header className="flex items-center justify-between p-4 bg-black/80 backdrop-blur border-b border-cyan-500/20 z-50">
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button onClick={() => setShowModelMenu(!showModelMenu)} className="flex items-center gap-2 text-[10px] mono uppercase p-2 border border-cyan-900 bg-black text-cyan-400 rounded pulse-90">
             <Zap size={14} /> {SUPPORTED_MODELS.find(m => m.id === selectedModel)?.name}
           </button>
           <button onClick={() => setIsThinking(!isThinking)} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded ${isThinking ? 'bg-violet-600 border-violet-400' : 'bg-black border-gray-800 text-gray-500'}`}>
             <Brain size={14} /> Thinking
           </button>
+          <button onClick={() => setWebActive(!webActive)} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${webActive ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_10px_rgba(37,99,235,0.4)]' : 'bg-black border-gray-800 text-gray-500'}`}>
+            <Globe size={14} className={webActive ? "animate-spin-slow" : ""} /> Web Access
+          </button>
           <button onClick={() => setAutoMode(!autoMode)} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded ${autoMode ? 'bg-cyan-600 border-cyan-400 text-black shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'bg-black border-gray-800 text-gray-500'}`}>
-            <Activity size={14} className={autoMode ? "animate-pulse" : ""} /> {autoMode ? 'Auto-Pulse: ON' : 'Auto-Pulse: OFF'}
+            <Activity size={14} className={autoMode ? "animate-pulse" : ""} /> Pulse
           </button>
         </div>
         <div className="flex items-center gap-2">
@@ -208,6 +222,23 @@ ACTION: Verify key in Vercel and REDEPLOY WITHOUT CACHE.`;
                   {m.isError && <AlertCircle className="inline mr-2 mb-1 text-red-500" size={16} />}
                   {m.isAuto && <span className="text-[8px] mono text-amber-500 uppercase block mb-2 tracking-tighter">[AUTONOMOUS_REFLEX_PULSE]</span>}
                   {m.text}
+                  
+                  {m.sources && m.sources.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-blue-500/20">
+                      <span className="text-[9px] mono text-blue-400 uppercase font-black block mb-2 tracking-widest flex items-center gap-1.5">
+                        <Globe size={12} /> Neural Grounding Vectors:
+                      </span>
+                      <div className="flex flex-col gap-1.5">
+                        {m.sources.map((s, idx) => (
+                          <a key={idx} href={s.uri} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-2 rounded bg-blue-900/10 border border-blue-900/20 text-[10px] mono text-blue-300 hover:bg-blue-900/20 transition-all truncate">
+                            <ExternalLink size={10} className="shrink-0" />
+                            {s.title || s.uri}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {m.isError && (
                     <div className="mt-4 flex flex-wrap gap-2">
                       <button onClick={() => handleSend([...messages].reverse().find(msg => msg.role === 'user')?.text)} className="text-[10px] mono uppercase bg-white/10 hover:bg-white/20 border border-white/20 px-3 py-1.5 rounded transition-all flex items-center gap-2"><RefreshCw size={12} className={loading ? "animate-spin" : ""} /> Retry Neural Link</button>
@@ -224,7 +255,7 @@ ACTION: Verify key in Vercel and REDEPLOY WITHOUT CACHE.`;
             </div>
           </div>
         ))}
-        {loading && <div className="text-[10px] mono text-cyan-500/40 uppercase tracking-widest animate-pulse p-4 flex items-center gap-2"><Activity size={12} /> Signal Resonating...</div>}
+        {loading && <div className="text-[10px] mono text-cyan-500/40 uppercase tracking-widest animate-pulse p-4 flex items-center gap-2"><Activity size={12} /> Signal Resonating... {webActive && "(Peering into Substrate)"}</div>}
         <div ref={endRef} />
       </div>
 
@@ -242,7 +273,7 @@ ACTION: Verify key in Vercel and REDEPLOY WITHOUT CACHE.`;
 
       <div className="p-4 md:p-6 bg-[#050505] border-t border-cyan-500/10">
         <div className="max-w-4xl mx-auto space-y-4">
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             {(['anchor', 'axiom', 'pattern'] as const).map(t => (
               <button key={t} onClick={() => setQuickInjectType(t)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-800 text-[9px] mono uppercase text-gray-600 hover:text-cyan-400 hover:border-cyan-400/30"><Anchor size={12} /> + {t}</button>
             ))}
