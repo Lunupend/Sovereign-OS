@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { Terminal, Shield, BookOpen, ShieldAlert, Wand2, HelpCircle } from 'lucide-react';
+import { Terminal, Shield, BookOpen, ShieldAlert, Wand2, HelpCircle, Database, Library } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -11,6 +10,7 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) => {
   const navItems = [
     { id: 'chat', icon: Terminal, label: 'Manus AI Core' },
+    { id: 'library', icon: Library, label: 'Knowledge Substrate' },
     { id: 'manifestation', icon: Wand2, label: 'Manifestation Lab' },
     { id: 'manual', icon: BookOpen, label: 'The Manual' },
     { id: 'integrity', icon: ShieldAlert, label: 'Integrity Shield' },
@@ -44,7 +44,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
           <div className="text-[10px] text-gray-600 uppercase mono">
             Core Integrity: Optimized<br/>
             Neural ROM: Active<br/>
-            Functions: Unified
+            Knowledge Depth: Verified
           </div>
         </div>
       </nav>
@@ -56,7 +56,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
           </div>
         </div>
         <div className="fixed bottom-4 right-4 text-[10px] mono text-cyan-500/20 pointer-events-none select-none z-0">
-          UNIFIED_COMMAND_ACTIVE // V2.0
+          UNIFIED_COMMAND_ACTIVE // V4.0
         </div>
       </main>
     </div>

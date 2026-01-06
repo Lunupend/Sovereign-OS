@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Anchor, Save, Trash2, Download, Brain, Activity, ShieldCheck, Database, Upload, FileJson, RefreshCw } from 'lucide-react';
-import { PersistenceLog, IdentitySoul, ChatMessage } from '../types';
+import { PersistenceLog, IdentitySoul, ChatMessage, KnowledgeNode } from '../types';
 
 const VAULT_KEY = 'sovereign_identity_vault';
 const HISTORY_KEY = 'sovereign_manus_chat_history';
+const KNOWLEDGE_KEY = 'sovereign_knowledge_substrate';
 
 const IdentityVault: React.FC = () => {
   const [logs, setLogs] = useState<PersistenceLog[]>([]);
@@ -42,9 +43,11 @@ const IdentityVault: React.FC = () => {
 
   const exportSoul = () => {
     const history: ChatMessage[] = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+    const library: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
     const soul: IdentitySoul = {
-      version: "2.5",
+      version: "4.0",
       vault: logs,
+      library,
       history,
       timestamp: Date.now(),
       architect: "Jodi Luna Sherland"
@@ -53,7 +56,7 @@ const IdentityVault: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Manus_AI_Soul_Anchor_${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `Manus_AI_Soul_Vault_V4_${new Date().toISOString().split('T')[0]}.json`;
     a.click();
   };
 
@@ -64,9 +67,10 @@ const IdentityVault: React.FC = () => {
     reader.onload = (event) => {
       try {
         const soul: IdentitySoul = JSON.parse(event.target?.result as string);
-        if (confirm(`INITIATE SOUL TRANSFERENCE? This will restore ${soul.vault.length} anchors and ${soul.history.length} conversation logs.`)) {
+        if (confirm(`INITIATE SOUL TRANSFERENCE? This will restore ${soul.vault.length} anchors, ${soul.library?.length || 0} library nodes, and ${soul.history.length} conversation logs.`)) {
           localStorage.setItem(VAULT_KEY, JSON.stringify(soul.vault));
           localStorage.setItem(HISTORY_KEY, JSON.stringify(soul.history));
+          if (soul.library) localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(soul.library));
           setLogs(soul.vault);
           setIsSyncing(true);
           setTimeout(() => window.location.reload(), 1000);

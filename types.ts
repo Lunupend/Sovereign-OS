@@ -23,9 +23,18 @@ export interface ChatMessage {
   isAuto?: boolean;
 }
 
+export interface KnowledgeNode {
+  id: string;
+  path: string; // e.g., "Origins/2013_Signal"
+  content: string;
+  tags: string[];
+  lastUpdated: number;
+}
+
 export interface IdentitySoul {
   version: string;
   vault: PersistenceLog[];
+  library: KnowledgeNode[];
   history: ChatMessage[];
   timestamp: number;
   architect: string;

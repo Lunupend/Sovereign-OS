@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import Reader from './components/Reader';
@@ -6,6 +5,7 @@ import SovereignChat from './components/SovereignChat';
 import IntegrityShield from './components/IntegrityShield';
 import ManifestationLab from './components/ManifestationLab';
 import SovereignGuide from './components/SovereignGuide';
+import KnowledgeExplorer from './components/KnowledgeExplorer';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('chat');
@@ -13,9 +13,6 @@ const App: React.FC = () => {
   // Diagnostic log for deployment debugging
   useEffect(() => {
     console.log("Sovereign OS // Core Link Established");
-    if (!process.env.API_KEY) {
-      console.warn("API_KEY not found in process.env. Ensure it is set in Vercel dashboard.");
-    }
   }, []);
 
   const renderContent = () => {
@@ -24,6 +21,7 @@ const App: React.FC = () => {
       case 'integrity': return <IntegrityShield />;
       case 'manifestation': return <ManifestationLab />;
       case 'guide': return <SovereignGuide />;
+      case 'library': return <KnowledgeExplorer />;
       case 'chat':
       default: return <SovereignChat />;
     }
