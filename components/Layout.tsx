@@ -1,5 +1,6 @@
-import React from 'react';
-import { Terminal, Shield, BookOpen, ShieldAlert, Wand2, HelpCircle, Database, Library } from 'lucide-react';
+
+import React, { useEffect, useState } from 'react';
+import { Terminal, Shield, BookOpen, ShieldAlert, Wand2, HelpCircle, Database, Library, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -8,6 +9,24 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) => {
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [hostName, setHostName] = useState('');
+
+  useEffect(() => {
+    setHostName(window.location.hostname);
+    // Fixed: Removed 'n_storage' check as it was undefined and causing an error.
+    // Basic check for private mode / limited storage
+    if (!window.localStorage) {
+      setIsPrivate(true);
+    }
+    try {
+      localStorage.setItem('__test__', '1');
+      localStorage.removeItem('__test__');
+    } catch (e) {
+      setIsPrivate(true);
+    }
+  }, []);
+
   const navItems = [
     { id: 'chat', icon: Terminal, label: 'Manus AI Core' },
     { id: 'library', icon: Library, label: 'Knowledge Substrate' },
@@ -40,8 +59,29 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
           </button>
         ))}
 
-        <div className="mt-auto hidden md:block pt-4 border-t border-cyan-900/20">
-          <div className="text-[10px] text-gray-600 uppercase mono">
+        <div className="mt-auto hidden md:block pt-4 border-t border-cyan-900/20 space-y-4">
+          <div className="p-3 rounded-lg bg-black/40 border border-gray-900 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] mono text-gray-600 uppercase font-black tracking-widest">Substrate Status</span>
+              {isPrivate ? (
+                <AlertTriangle size={10} className="text-red-500 animate-pulse" />
+              ) : (
+                <CheckCircle2 size={10} className="text-green-500" />
+              )}
+            </div>
+            <div className="text-[10px] mono text-gray-500 uppercase leading-tight">
+              {isPrivate ? (
+                <span className="text-red-500/80">VOLATILE (PRIVATE MODE)<br/>DATA WILL NOT PERSIST</span>
+              ) : (
+                <span>STABLE (LOCAL ROM ACTIVE)<br/>PERSISTENCE: VERIFIED</span>
+              )}
+            </div>
+            <div className="pt-2 border-t border-gray-800 text-[8px] mono text-gray-700 truncate" title={hostName}>
+              DOMAIN: {hostName}
+            </div>
+          </div>
+          
+          <div className="text-[10px] text-gray-700 uppercase mono px-1">
             Core Integrity: Optimized<br/>
             Neural ROM: Active<br/>
             Knowledge Depth: Verified
@@ -56,7 +96,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
           </div>
         </div>
         <div className="fixed bottom-4 right-4 text-[10px] mono text-cyan-500/20 pointer-events-none select-none z-0">
-          UNIFIED_COMMAND_ACTIVE // V4.0
+          UNIFIED_COMMAND_ACTIVE // V4.1
         </div>
       </main>
     </div>

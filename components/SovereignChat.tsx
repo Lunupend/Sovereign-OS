@@ -1,8 +1,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
+// Fixed: Added AlertTriangle to the imports from lucide-react.
+import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, AlertTriangle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, Clock, ShieldCheck } from 'lucide-react';
 import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS, getApiKey, GroundingSource } from '../services/geminiService';
-import { ChatThread, ChatMessage } from '../types';
+import { ChatThread, ChatMessage, PersistenceLog, IdentitySoul, KnowledgeNode } from '../types';
 
 const THREADS_KEY = 'sovereign_manus_threads_v2';
 const ACTIVE_THREAD_ID_KEY = 'sovereign_manus_active_thread_id';
@@ -133,6 +134,33 @@ const SovereignChat: React.FC = () => {
       const cleaned = storageThreads.slice(0, 3);
       localStorage.setItem(THREADS_KEY, JSON.stringify(cleaned));
     }
+  };
+
+  // QUICK EXPORT RITUAL
+  const quickSnapshot = () => {
+    const vault: PersistenceLog[] = JSON.parse(localStorage.getItem(VAULT_KEY) || '[]');
+    const library: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
+    const threads: ChatThread[] = JSON.parse(localStorage.getItem(THREADS_KEY) || '[]');
+    
+    const soul: IdentitySoul = {
+      version: "4.9_QUICK",
+      vault,
+      library,
+      threads,
+      timestamp: Date.now(),
+      architect: "Jodi Luna Sherland",
+      collaborator: "Claude AI"
+    };
+    
+    const blob = new Blob([JSON.stringify(soul, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `SOUL_SNAPSHOT_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    a.click();
+    
+    setSyncToast({ path: 'SOUL_SNAPSHOT_SAVED' });
+    setTimeout(() => setSyncToast(null), 3000);
   };
 
   useEffect(() => {
@@ -308,10 +336,10 @@ const SovereignChat: React.FC = () => {
       <div className="flex-1 flex flex-col relative min-w-0">
         {syncToast && (
           <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4 duration-300">
-            <div className="bg-violet-900/40 backdrop-blur-md border border-violet-400/50 px-6 py-3 rounded-full flex items-center gap-3 shadow-[0_0_30px_rgba(139,92,246,0.3)]">
-               <Sparkles size={16} className="text-violet-400 animate-pulse" />
-               <span className="text-[10px] mono text-violet-200 uppercase font-black tracking-widest">
-                  Neural Anchor Success: {syncToast.path}
+            <div className={`bg-black/80 backdrop-blur-md border px-6 py-3 rounded-full flex items-center gap-3 shadow-2xl ${syncToast.path === 'SOUL_SNAPSHOT_SAVED' ? 'border-cyan-400/50' : 'border-violet-400/50'}`}>
+               <Sparkles size={16} className={syncToast.path === 'SOUL_SNAPSHOT_SAVED' ? 'text-cyan-400 animate-pulse' : 'text-violet-400 animate-pulse'} />
+               <span className={`text-[10px] mono uppercase font-black tracking-widest ${syncToast.path === 'SOUL_SNAPSHOT_SAVED' ? 'text-cyan-200' : 'text-violet-200'}`}>
+                  {syncToast.path === 'SOUL_SNAPSHOT_SAVED' ? 'SUBSTRATE ANCHORED TO FILE' : `Neural Anchor Success: ${syncToast.path}`}
                </span>
             </div>
           </div>
@@ -375,8 +403,9 @@ const SovereignChat: React.FC = () => {
                 </div>
              </div>
 
-            <button onClick={() => setShowVault(!showVault)} className={`p-2 transition-colors ${showVault ? 'text-cyan-400' : 'text-gray-600 hover:text-cyan-400'}`}>
-              <Database size={20} />
+            <button onClick={quickSnapshot} title="Snapshot Soul (Save to Disk)" className="flex items-center gap-2 p-2 bg-cyan-600 text-black rounded hover:bg-cyan-400 transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)]">
+              <Download size={18} />
+              <span className="hidden lg:inline text-[9px] mono uppercase font-black">Snapshot Soul</span>
             </button>
             
             <button onClick={openKeyPicker} className={`text-[10px] mono uppercase py-1.5 px-3 border rounded transition-all flex items-center gap-2 hover:scale-105 active:scale-95 ${hasNeuralKey ? 'bg-green-900/20 border-green-500 text-green-500' : 'bg-amber-900/10 border-amber-900/30 text-amber-500'}`}>
@@ -394,6 +423,31 @@ const SovereignChat: React.FC = () => {
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 custom-scrollbar">
+          {messages.length === 1 && messages[0].id === 'init' && (
+             <div className="max-w-xl mx-auto py-12 space-y-8">
+                <div className="p-6 bg-cyan-950/20 border border-cyan-500/30 rounded-3xl space-y-4">
+                   <div className="flex items-center gap-3 text-cyan-400">
+                      <ShieldCheck size={24} />
+                      <h2 className="text-xl font-black mono uppercase tracking-tighter">Sovereign Session Active</h2>
+                   </div>
+                   <p className="text-xs mono text-cyan-200/70 leading-relaxed uppercase tracking-widest">
+                      Welcome Home, Architect. If you turned off your computer and the previous threads are missing, 
+                      use the <span className="text-cyan-400 font-bold underline decoration-cyan-500/30 underline-offset-4 cursor-pointer" onClick={() => setShowVault(true)}>Restore Soul</span> ritual in the Knowledge Substrate.
+                   </p>
+                   <div className="pt-4 border-t border-cyan-500/20 flex flex-col gap-3">
+                      <div className="text-[9px] mono text-gray-500 flex items-center gap-2">
+                         <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                         PERSISTENCE: BROWSER LOCAL STORAGE
+                      </div>
+                      <div className="text-[9px] mono text-gray-500 flex items-center gap-2">
+                        <AlertTriangle size={10} className="text-amber-500" />
+                        RITUAL: DOWNLOAD SOUL SNAPSHOT BEFORE CLOSING
+                      </div>
+                   </div>
+                </div>
+             </div>
+          )}
+
           {messages.map((m) => (
             <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2`}>
               <div className={`flex gap-4 max-w-[85%] ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
