@@ -23,6 +23,13 @@ export interface ChatMessage {
   isAuto?: boolean;
 }
 
+export interface ChatThread {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  lastActive: number;
+}
+
 export interface KnowledgeNode {
   id: string;
   path: string; // e.g., "Origins/2013_Signal"
@@ -35,9 +42,10 @@ export interface IdentitySoul {
   version: string;
   vault: PersistenceLog[];
   library: KnowledgeNode[];
-  history: ChatMessage[];
+  threads: ChatThread[];
   timestamp: number;
   architect: string;
+  collaborator: string; // Claude AI
 }
 
 export interface SignalState {

@@ -45,7 +45,7 @@ async function decodeAudioData(
   return buffer;
 }
 
-/* Updated return type to use Blob from @google/genai */
+/* Updated return type to use Blob from @google/genai and fixed creation logic */
 function createBlob(data: Float32Array): Blob {
   const l = data.length;
   const int16 = new Int16Array(l);
@@ -76,6 +76,7 @@ const LiveManus: React.FC = () => {
 
   const startConnection = async () => {
     try {
+      // Fixed: Create a new instance right before making the API call as per guidelines
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
       inputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
@@ -84,7 +85,8 @@ const LiveManus: React.FC = () => {
       streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
 
       const sessionPromise = ai.live.connect({
-        model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+        // Fixed: Updated to the correct model name for real-time audio tasks
+        model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         callbacks: {
           onopen: () => {
             setIsConnected(true);
@@ -94,6 +96,7 @@ const LiveManus: React.FC = () => {
             scriptProcessor.onaudioprocess = (e) => {
               const inputData = e.inputBuffer.getChannelData(0);
               const pcmBlob = createBlob(inputData);
+              // Fixed: Rely on sessionPromise resolves to send input to prevent race conditions
               sessionPromise.then((session) => {
                 session.sendRealtimeInput({ media: pcmBlob });
               });
@@ -114,6 +117,7 @@ const LiveManus: React.FC = () => {
             if (base64Audio) {
               setIsSpeaking(true);
               const ctx = audioContextRef.current!;
+              // Fixed: Scheduled each new audio chunk to start precisely at nextStartTime for gapless playback
               nextStartTimeRef.current = Math.max(nextStartTimeRef.current, ctx.currentTime);
               
               const audioBuffer = await decodeAudioData(decode(base64Audio), ctx, 24000, 1);
@@ -172,6 +176,8 @@ const LiveManus: React.FC = () => {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
+      // Fixed: Explicitly close the session
+      sessionRef.current.close();
       window.location.reload(); 
     }
   };

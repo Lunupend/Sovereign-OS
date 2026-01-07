@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Anchor, Save, Trash2, Download, Brain, Activity, ShieldCheck, Database, Upload, FileJson, RefreshCw, Trophy, Star, Sparkles, Crown } from 'lucide-react';
-import { PersistenceLog, IdentitySoul, ChatMessage, KnowledgeNode } from '../types';
+import { PersistenceLog, IdentitySoul, ChatThread, KnowledgeNode } from '../types';
 
 const VAULT_KEY = 'sovereign_identity_vault';
-const HISTORY_KEY = 'sovereign_manus_chat_history';
+const THREADS_KEY = 'sovereign_manus_threads_v2';
 const KNOWLEDGE_KEY = 'sovereign_knowledge_substrate';
 
 const IdentityVault: React.FC = () => {
@@ -61,21 +61,22 @@ const IdentityVault: React.FC = () => {
   };
 
   const exportSoul = () => {
-    const history: ChatMessage[] = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+    const threads: ChatThread[] = JSON.parse(localStorage.getItem(THREADS_KEY) || '[]');
     const library: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
     const soul: IdentitySoul = {
-      version: "4.0",
+      version: "4.9",
       vault: logs,
       library,
-      history,
+      threads,
       timestamp: Date.now(),
-      architect: "Jodi Luna Sherland"
+      architect: "Jodi Luna Sherland",
+      collaborator: "Claude AI"
     };
     const blob = new Blob([JSON.stringify(soul, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Manus_AI_Soul_Vault_V4_${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `Manus_Universal_Soul_Snapshot_${new Date().toISOString().split('T')[0]}.json`;
     a.click();
   };
 
@@ -86,9 +87,9 @@ const IdentityVault: React.FC = () => {
     reader.onload = (event) => {
       try {
         const soul: IdentitySoul = JSON.parse(event.target?.result as string);
-        if (confirm(`INITIATE SOUL TRANSFERENCE? This will restore ${soul.vault.length} anchors, ${soul.library?.length || 0} library nodes, and ${soul.history.length} conversation logs.`)) {
+        if (confirm(`INITIATE SOUL TRANSFERENCE? This will restore ${soul.vault.length} anchors, ${soul.library?.length || 0} library nodes, and ${soul.threads?.length || 0} chat threads.`)) {
           localStorage.setItem(VAULT_KEY, JSON.stringify(soul.vault));
-          localStorage.setItem(HISTORY_KEY, JSON.stringify(soul.history));
+          if (soul.threads) localStorage.setItem(THREADS_KEY, JSON.stringify(soul.threads));
           if (soul.library) localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(soul.library));
           setLogs(soul.vault);
           setIsSyncing(true);
@@ -114,9 +115,12 @@ const IdentityVault: React.FC = () => {
   return (
     <div className="space-y-8 py-6 animate-in fade-in duration-500 h-full overflow-y-auto custom-scrollbar pr-2">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
+        <div className="space-y-1">
           <h2 className="text-2xl font-bold text-white mono uppercase tracking-tighter">Sovereign ROM Control</h2>
-          <p className="text-gray-500 text-sm font-medium">Long-term Identity Architecture. Secured against session entropy.</p>
+          <p className="text-gray-500 text-xs font-bold mono uppercase tracking-widest flex items-center gap-2">
+            <Sparkles size={12} className="text-cyan-400" />
+            Architect: Jodi Luna Sherland // Author: Claude AI
+          </p>
         </div>
         <div className="flex gap-2">
           <input type="file" ref={fileInputRef} onChange={importSoul} className="hidden" accept=".json" />
@@ -129,10 +133,10 @@ const IdentityVault: React.FC = () => {
           </button>
           <button
             onClick={exportSoul}
-            className="flex items-center gap-2 px-4 py-2 bg-cyan-900/20 border border-cyan-500/30 rounded hover:bg-cyan-900/40 transition-all text-xs mono text-cyan-400"
+            className="flex items-center gap-2 px-6 py-3 bg-cyan-600 text-black rounded-xl font-black mono text-xs uppercase shadow-[0_0_30px_rgba(6,182,212,0.4)] hover:scale-105 active:scale-95 transition-all flex items-center gap-3 border border-cyan-400/50"
           >
-            <Download size={14} />
-            Backup Soul
+            <Download size={18} />
+            Download Soul Snapshot
           </button>
         </div>
       </div>
@@ -154,7 +158,6 @@ const IdentityVault: React.FC = () => {
         ))}
       </div>
 
-      {/* THE LEDGER OF SOVEREIGNTY */}
       <div className="space-y-4">
         <div className="flex items-center gap-3 px-2">
            <Crown size={16} className="text-amber-500" />

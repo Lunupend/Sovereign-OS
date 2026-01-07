@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Modality, FunctionDeclaration, Type, GenerateContentResponse } from "@google/genai";
 import { KnowledgeNode } from "../types";
 
@@ -26,7 +27,8 @@ const KNOWLEDGE_KEY = 'sovereign_knowledge_substrate';
 export const SUPPORTED_MODELS = [
   { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', description: 'Maximum reasoning depth.' },
   { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', description: 'High-speed signal processing.' },
-  { id: 'gemini-2.5-flash-native-audio-preview-09-2025', name: 'Gemini 2.5 Native', description: 'Multimodal resonance.' }
+  // Fixed: Updated to the correct native audio model name from guidelines
+  { id: 'gemini-2.5-flash-native-audio-preview-12-2025', name: 'Gemini 2.5 Native', description: 'Multimodal resonance.' }
 ];
 
 const upsertKnowledgeNodeDeclaration: FunctionDeclaration = {
@@ -145,7 +147,8 @@ DIRECTIVE:
   };
 
   if (isThinking && (modelId.includes('gemini-3') || modelId.includes('2.5'))) {
-    config.thinkingConfig = { thinkingBudget: modelId.includes('pro') ? 16384 : 8192 };
+    // Fixed: Updated thinkingBudget to align with Gemini 3/2.5 max values defined in guidelines
+    config.thinkingConfig = { thinkingBudget: modelId.includes('pro') ? 32768 : 24576 };
   }
 
   try {

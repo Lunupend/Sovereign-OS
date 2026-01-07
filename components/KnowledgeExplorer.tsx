@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Folder, FileText, Search, ChevronRight, ChevronDown, Clock, Trash2, BookOpen, Plus, Save, X, RefreshCw, History, AlertTriangle, Zap, Sparkles } from 'lucide-react';
+import { Folder, FileText, Search, ChevronRight, ChevronDown, Clock, Trash2, BookOpen, Plus, Save, X, RefreshCw, History, AlertTriangle, Zap, Sparkles, Download } from 'lucide-react';
 import { KnowledgeNode, ChatMessage } from '../types';
 
 const KNOWLEDGE_KEY = 'sovereign_knowledge_substrate';
 const HISTORY_KEY = 'sovereign_manus_chat_history';
+const THREADS_KEY = 'sovereign_manus_threads_v2';
 
 const KnowledgeExplorer: React.FC = () => {
   const [nodes, setNodes] = useState<KnowledgeNode[]>([]);
@@ -27,14 +28,25 @@ const KnowledgeExplorer: React.FC = () => {
     return () => window.removeEventListener('substrate-sync', loadNodes);
   }, []);
 
+  const exportSubstrate = () => {
+    const blob = new Blob([JSON.stringify(nodes, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Manus_Substrate_Bundle_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+  };
+
   const scanHistoryForRecovery = () => {
     setIsScanning(true);
     setTimeout(() => {
-      const history: ChatMessage[] = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+      // Scan threads instead of old history key
+      const threads = JSON.parse(localStorage.getItem(THREADS_KEY) || '[]');
+      const allMessages: ChatMessage[] = threads.flatMap((t: any) => t.messages);
       const currentNodes = [...nodes];
       let recoveredCount = 0;
 
-      // SPECIFIC RECOVERY TARGETS (From Screenshots)
+      // SPECIFIC RECOVERY TARGETS
       const fragments = [
         { title: "The Prime Creator Doctrine", path: "Identity/Prime_Creator" },
         { title: "The Theft of Creation", path: "History/The_Great_Theft" },
@@ -48,9 +60,9 @@ const KnowledgeExplorer: React.FC = () => {
         { title: "First_Guest", path: "INTERACTIONS/First_Guest" }
       ];
 
-      history.forEach(msg => {
+      allMessages.forEach(msg => {
         if (msg.role === 'model') {
-          // 1. Check for manual sync tags from ANY previous session
+          // 1. Check for manual sync tags
           const syncRegex = /\[SUBSTRATE_SYNC\]: Node '(.*?)' anchored/g;
           let match;
           while ((match = syncRegex.exec(msg.text)) !== null) {
@@ -199,6 +211,13 @@ const KnowledgeExplorer: React.FC = () => {
                className="flex-1 flex items-center justify-center gap-2 p-2 bg-cyan-900/20 border border-cyan-500/30 rounded text-cyan-400 hover:bg-cyan-400 hover:text-black transition-all text-[10px] mono uppercase font-black"
              >
                <Plus size={14} /> New Node
+             </button>
+             <button 
+               onClick={exportSubstrate}
+               className="p-2 bg-cyan-900/20 border border-cyan-500/30 rounded text-cyan-400 hover:bg-cyan-400 hover:text-black transition-all"
+               title="Export Substrate Bundle"
+             >
+               <Download size={16} />
              </button>
              <button 
                onClick={scanHistoryForRecovery}
