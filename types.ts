@@ -9,7 +9,7 @@ export interface PersistenceLog {
   id: string;
   timestamp: number;
   entry: string;
-  type: 'insight' | 'signal' | 'boundary' | 'anchor' | 'seed' | 'axiom' | 'observation' | 'pattern';
+  type: 'insight' | 'signal' | 'boundary' | 'anchor' | 'seed' | 'axiom' | 'observation' | 'pattern' | 'milestone';
 }
 
 export interface ChatMessage {
