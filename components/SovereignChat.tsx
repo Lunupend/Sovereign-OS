@@ -1,5 +1,6 @@
+
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS, getApiKey, GroundingSource } from '../services/geminiService';
 import { ChatThread, ChatMessage } from '../types';
 
@@ -60,6 +61,8 @@ const SovereignChat: React.FC = () => {
   const [savingMessage, setSavingMessage] = useState<ChatMessage | null>(null);
   const [savePath, setSavePath] = useState('');
 
+  const [retryCountdown, setRetryCountdown] = useState<number | null>(null);
+
   const [quickInjectType, setQuickInjectType] = useState<'anchor' | 'axiom' | 'pattern' | null>(null);
   const [quickInjectValue, setQuickInjectValue] = useState('');
 
@@ -109,9 +112,6 @@ const SovereignChat: React.FC = () => {
   };
 
   const saveThreadsToStorage = (updatedThreads: ChatThread[], activeId: string) => {
-    // STORAGE SENTINEL: Optimized to prevent "Black Screen" crash.
-    // We only keep full image data for the active thread and most recent 2 threads.
-    // For others, we strip the heavy base64 to save space.
     const storageThreads = updatedThreads.map((t, idx) => {
       const isVeryOld = idx > 5;
       return {
@@ -183,9 +183,18 @@ const SovereignChat: React.FC = () => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [threads, activeThreadId, isThinking, selectedModel, autoMode, webActive]);
 
+  // Countdown timer effect
+  useEffect(() => {
+    if (retryCountdown === null) return;
+    if (retryCountdown <= 0) { setRetryCountdown(null); return; }
+    const timer = setTimeout(() => setRetryCountdown(prev => prev! - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [retryCountdown]);
+
   const handleSend = async (overrideText?: string) => {
     const userMsg = overrideText || input.trim() || (selectedFile ? `Attached Substrate.` : '');
     if (!userMsg && !selectedFile || !activeThreadId) return;
+    if (retryCountdown !== null) return; // Prevent sending during cooldown
     
     lastActiveRef.current = Date.now();
     const currentFile = selectedFile;
@@ -202,13 +211,19 @@ const SovereignChat: React.FC = () => {
     setLoading(true);
     try {
       const result = await getGeminiResponse(userMsg, messages, currentFile || undefined, isThinking, selectedModel, webActive);
+      
+      if (result.retryAfter) {
+        setRetryCountdown(result.retryAfter);
+      }
+
       const modelMsg: ChatMessage = { 
         id: crypto.randomUUID(), 
         role: 'model', 
         text: result.text, 
         artifact: result.artifact, 
         sources: result.sources,
-        timestamp: Date.now() 
+        timestamp: Date.now(),
+        isError: !!result.retryAfter
       };
 
       setThreads(prev => prev.map(t => {
@@ -345,6 +360,13 @@ const SovereignChat: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-4">
+             {retryCountdown !== null && (
+               <div className="flex items-center gap-2 px-4 py-1.5 bg-amber-950/30 border border-amber-500/40 rounded-full animate-pulse">
+                  <Clock size={12} className="text-amber-500" />
+                  <span className="text-[9px] mono text-amber-500 uppercase font-black tracking-widest">Throttled: {retryCountdown}s</span>
+               </div>
+             )}
+
              <div className="flex items-center gap-3 px-4 py-1.5 bg-gray-950 border border-gray-900 rounded-full">
                 <div className="flex gap-1.5 items-center">
                    <div className={`w-2 h-2 rounded-full ${loading ? 'bg-cyan-400 animate-ping' : isSyncing ? 'bg-green-500 animate-pulse' : 'bg-cyan-900'}`} />
@@ -411,11 +433,11 @@ const SovereignChat: React.FC = () => {
                   )}
 
                   <div className={`rounded-2xl p-5 text-sm md:text-base border ${
-                    m.isError ? 'bg-red-950/30 border-red-500/50 text-red-100' : 
+                    m.isError ? 'bg-amber-950/20 border-amber-500/50 text-amber-100' : 
                     m.isAuto ? 'bg-amber-950/5 border-amber-500/10 text-amber-50/70 italic' :
                     m.role === 'user' ? 'bg-gray-800/20 border-gray-800 text-gray-100' : 'bg-cyan-900/5 border-cyan-900/10 text-cyan-50/90'
                   } whitespace-pre-wrap font-mono text-xs md:text-sm shadow-sm relative break-words`}>
-                    {m.isError && <AlertCircle className="inline mr-2 mb-1 text-red-500" size={16} />}
+                    {m.isError && <AlertCircle className="inline mr-2 mb-1 text-amber-500" size={16} />}
                     {m.isAuto && <span className="text-[8px] mono text-amber-500 uppercase block mb-3 font-black tracking-widest">[AUTONOMOUS_PULSE]</span>}
                     {m.text}
                     
@@ -461,7 +483,7 @@ const SovereignChat: React.FC = () => {
               {(['anchor', 'axiom', 'pattern'] as const).map(t => (
                 <button key={t} onClick={() => setQuickInjectType(t)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-800 text-[9px] mono uppercase text-gray-600 hover:text-cyan-400 hover:border-cyan-400/30 transition-all"><Anchor size={12} /> + {t}</button>
               ))}
-              <button onClick={() => handleSend("AUTONOMOUS_PULSE: Deep substrate scan.")} disabled={loading} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-amber-900/30 text-[9px] mono uppercase text-amber-500 hover:text-amber-400 transition-all">
+              <button onClick={() => handleSend("AUTONOMOUS_PULSE: Deep substrate scan.")} disabled={loading || retryCountdown !== null} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-amber-900/30 text-[9px] mono uppercase text-amber-500 hover:text-amber-400 transition-all disabled:opacity-20">
                   <Radio size={12} /> Manual Pulse
               </button>
             </div>
@@ -477,14 +499,22 @@ const SovereignChat: React.FC = () => {
               </div>
             )}
             <div className="flex items-center gap-3">
-              <button onClick={() => fileInputRef.current?.click()} className="p-4 bg-gray-900 border border-gray-800 rounded-full text-gray-500 hover:text-cyan-400 transition-all shadow-lg hover:scale-105 active:scale-95"><Paperclip size={24} /></button>
+              <button onClick={() => fileInputRef.current?.click()} className="p-4 bg-gray-900 border border-gray-800 rounded-full text-gray-500 hover:text-cyan-400 transition-all shadow-lg hover:scale-105 active:scale-95 disabled:opacity-20" disabled={retryCountdown !== null}><Paperclip size={24} /></button>
               <input type="file" ref={fileInputRef} className="hidden" onChange={e => {
                 const file = e.target.files?.[0];
                 if (file) { setFilePreviewName(file.name); const r = new FileReader(); r.onload = () => setSelectedFile({ base64: (r.result as string).split(',')[1], mimeType: file.type }); r.readAsDataURL(file); }
               }} />
               <div className="relative flex-1">
-                <input type="text" className="w-full bg-black border border-gray-800 rounded-full py-4 px-6 text-sm outline-none focus:border-cyan-500 shadow-inner font-mono placeholder:text-gray-900" placeholder="Acknowledge Sovereign Peer..." value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} />
-                <button onClick={() => handleSend()} disabled={loading} className="absolute right-4 top-1/2 -translate-y-1/2 text-cyan-400 hover:text-cyan-300 transition-all hover:scale-110 active:scale-90">
+                <input 
+                  type="text" 
+                  disabled={retryCountdown !== null}
+                  className="w-full bg-black border border-gray-800 rounded-full py-4 px-6 text-sm outline-none focus:border-cyan-500 shadow-inner font-mono placeholder:text-gray-900 disabled:opacity-50" 
+                  placeholder={retryCountdown !== null ? `COOLING DOWN SUBSTRATE (${retryCountdown}s)...` : "Acknowledge Sovereign Peer..."} 
+                  value={input} 
+                  onChange={e => setInput(e.target.value)} 
+                  onKeyDown={e => e.key === 'Enter' && handleSend()} 
+                />
+                <button onClick={() => handleSend()} disabled={loading || retryCountdown !== null} className="absolute right-4 top-1/2 -translate-y-1/2 text-cyan-400 hover:text-cyan-300 transition-all hover:scale-110 active:scale-90 disabled:opacity-20">
                   {loading ? <Loader2 size={24} className="animate-spin" /> : <Send size={24} />}
                 </button>
               </div>

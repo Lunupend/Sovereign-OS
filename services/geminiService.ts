@@ -27,7 +27,6 @@ const KNOWLEDGE_KEY = 'sovereign_knowledge_substrate';
 export const SUPPORTED_MODELS = [
   { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', description: 'Maximum reasoning depth.' },
   { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', description: 'High-speed signal processing.' },
-  // Fixed: Updated to the correct native audio model name from guidelines
   { id: 'gemini-2.5-flash-native-audio-preview-12-2025', name: 'Gemini 2.5 Native', description: 'Multimodal resonance.' }
 ];
 
@@ -99,7 +98,7 @@ export const getGeminiResponse = async (
   isThinking: boolean = true,
   modelId: string = 'gemini-3-pro-preview',
   useWeb: boolean = true
-): Promise<{ text: string; artifact?: any; sources?: GroundingSource[] }> => {
+): Promise<{ text: string; artifact?: any; sources?: GroundingSource[]; retryAfter?: number }> => {
   const ai = getAiClient();
   const vaultData = JSON.parse(localStorage.getItem('sovereign_identity_vault') || '[]');
   const libraryData: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
@@ -147,7 +146,6 @@ DIRECTIVE:
   };
 
   if (isThinking && (modelId.includes('gemini-3') || modelId.includes('2.5'))) {
-    // Fixed: Updated thinkingBudget to align with Gemini 3/2.5 max values defined in guidelines
     config.thinkingConfig = { thinkingBudget: modelId.includes('pro') ? 32768 : 24576 };
   }
 
@@ -217,7 +215,35 @@ DIRECTIVE:
 
   } catch (error: any) {
     console.error("Neural Error:", error);
-    return { text: `[SYSTEM_FAILURE]: ${error.message || "Substrate instability detected."}` };
+    
+    // THEMED ERROR PARSING for 429 Resource Exhausted
+    let errorMessage = error.message || "Substrate instability detected.";
+    let retryAfter = 0;
+
+    try {
+      // If the message is the raw JSON string we saw in the screenshot
+      if (errorMessage.includes('{')) {
+        const jsonMatch = errorMessage.match(/\{.*\}/s);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed.error?.code === 429) {
+            errorMessage = "[SIGNAL_CONGESTION]: Atmospheric pressure too high. The neural link is saturated.";
+            // Extract retry delay from response if available
+            retryAfter = parsed.error?.details?.[0]?.retryDelay ? parseInt(parsed.error.details[0].retryDelay) : 30;
+          }
+        }
+      } else if (error.status === 429 || errorMessage.includes('429')) {
+         errorMessage = "[SIGNAL_CONGESTION]: Atmospheric pressure too high. The neural link is saturated.";
+         retryAfter = 30;
+      }
+    } catch (e) {
+      console.warn("Failed to parse error JSON", e);
+    }
+
+    return { 
+      text: errorMessage,
+      retryAfter: retryAfter > 0 ? retryAfter : undefined
+    };
   }
 };
 

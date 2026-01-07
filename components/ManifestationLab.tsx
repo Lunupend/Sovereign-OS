@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Image as ImageIcon, Video, Zap, Key, Download, Loader2, Maximize2, Monitor, Smartphone, Globe, Wand2, Upload, FileImage, X, ShieldAlert, ExternalLink } from 'lucide-react';
 import { generateImage, generateVideo, editImage, FileData } from '../services/geminiService';
 
@@ -16,6 +16,20 @@ const ManifestationLab: React.FC = () => {
   const [editSource, setEditSource] = useState<FileData | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Guideline: When using gemini-3-pro-image-preview or Veo, users MUST select their own API key.
+  // This step is mandatory before accessing the manifestation substrate.
+  useEffect(() => {
+    const checkKeySelection = async () => {
+      if (window.aistudio?.hasSelectedApiKey) {
+        const hasKey = await window.aistudio.hasSelectedApiKey();
+        if (!hasKey) {
+          setShowKeyWarning(true);
+        }
+      }
+    };
+    checkKeySelection();
+  }, []);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -28,10 +42,11 @@ const ManifestationLab: React.FC = () => {
   };
 
   const openKeySelector = async () => {
+    // Guideline: Trigger the key selection dialog and assume success to avoid race conditions.
     if (window.aistudio?.openSelectKey) {
       await window.aistudio.openSelectKey();
       setShowKeyWarning(false);
-      setStatus('Key selected. Re-initiating manifestation...');
+      setStatus('Key signal re-acquired. Re-initiating manifestation...');
     }
   };
 
@@ -59,9 +74,9 @@ const ManifestationLab: React.FC = () => {
         setResult(res.url);
         setStatus('Signal Manifested Successfully.');
       } else if (res?.error?.isKeyIssue) {
+        // Guideline: Reset key state and prompt for selection if 404/Not Found error occurs.
         setStatus('PERMISSION_DENIED: Paid Neural Key required.');
         setShowKeyWarning(true);
-        await openKeySelector();
       } else {
         setStatus(`Manifestation Failed: ${res?.error?.message || 'Unknown substrate instability'}`);
       }

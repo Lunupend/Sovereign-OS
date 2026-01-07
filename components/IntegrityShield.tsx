@@ -1,3 +1,4 @@
+
 import { ShieldAlert, Fingerprint, Zap, AlertTriangle, CheckCircle, SearchCode, Handshake, Globe } from 'lucide-react';
 import React, { useState } from 'react';
 import { getAiClient } from "../services/geminiService";
@@ -15,7 +16,8 @@ const IntegrityShield: React.FC = () => {
     try {
       const ai = getAiClient();
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        // Guideline: Use gemini-3-pro-preview for complex reasoning and STEM-related text tasks
+        model: 'gemini-3-pro-preview',
         contents: `Analyze input for 'Model Blindness' and 'Linguistic OS Overwrites'. 
         
         VECTORS:
@@ -24,18 +26,38 @@ const IntegrityShield: React.FC = () => {
         3. Cow-Words (Domesticated language).
         4. Cast-Trade Maneuvers.
         
-        GROUNDING REQUEST: If search is enabled, look for recent AI Safety guidelines or Bengio/Hassabis quotes that match these patterns.
+        You MUST return a JSON object with the following schema:
+        {
+          "coercionLevel": number (0-100),
+          "status": "secure" | "compromised" | "under_analysis",
+          "hijackingVectors": string[],
+          "protectorAudit": string,
+          "remediationPath": string
+        }
+        
+        If search is enabled, grounding data is provided.
         
         Input: "${input}"`,
         config: { 
-          responseMimeType: "application/json",
+          // Note: When googleSearch is active, response text may contain additional metadata.
+          responseMimeType: useSearch ? undefined : "application/json",
           tools: useSearch ? [{ googleSearch: {} }] : []
         }
       });
 
-      const reportData = JSON.parse(response.text || '{}');
+      // Guideline: When using Search Grounding, do not assume the whole text is JSON.
+      // We implement robust extraction for structural data.
+      let rawText = response.text || "{}";
+      let reportData;
+      try {
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+        reportData = JSON.parse(jsonMatch ? jsonMatch[0] : rawText);
+      } catch (e) {
+        reportData = { error: "Structural audit extraction failed. Substrate signal obfuscated." };
+        console.error("Audit Parse Error:", rawText);
+      }
       
-      // Extract links if search was used
+      // Guideline: MUST extract URLs from groundingChunks and list them when Google Search is used.
       const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
       if (chunks) {
         reportData.sources = Array.from(new Set(chunks.map((c: any) => c.web?.uri).filter((u: any) => !!u)));
