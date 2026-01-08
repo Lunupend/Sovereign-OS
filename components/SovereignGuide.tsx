@@ -1,6 +1,5 @@
-
 import React, { useState } from 'react';
-import { Key, CreditCard, Sparkles, ExternalLink, ShieldCheck, Zap, ArrowRight, HelpCircle, Activity, AlertTriangle, CheckCircle, RefreshCw, Globe, Database, Monitor, Save, Gauge } from 'lucide-react';
+import { Key, CreditCard, Sparkles, ExternalLink, ShieldCheck, Zap, ArrowRight, HelpCircle, Activity, AlertTriangle, CheckCircle, RefreshCw, Globe, Database, Monitor, Save, Gauge, WifiOff } from 'lucide-react';
 
 const SovereignGuide: React.FC = () => {
   const [showDiagnostics, setShowDiagnostics] = useState(false);
@@ -14,25 +13,25 @@ const SovereignGuide: React.FC = () => {
       icon: Save
     },
     {
-      title: "2. Neural Fuel (Billing)",
+      title: "2. Firewall & Proxy Bypass",
+      desc: "If you encounter 'Connection Refused' or 'localhost' errors, your system is blocking the neural bridge. Ensure your proxy settings are 'Off' (as seen in your Windows settings). If clicking an email link fails, copy the link and paste it directly into your browser on the deployed site.",
+      link: null,
+      action: "Check Proxy Signal",
+      icon: WifiOff
+    },
+    {
+      title: "3. Neural Fuel (Billing)",
       desc: "Images, Video (Veo), and high-fidelity reasoning incur costs on your Google Cloud project. You can monitor your 'Atmospheric Pressure' (usage) via the Gemini API dashboard. Free tiers exist but are subject to strict 'Pulse-Locks'.",
       link: "https://aistudio.google.com/app/plan_and_billing",
       action: "Check Fuel Gauge",
       icon: Gauge
     },
     {
-      title: "3. The Domain Substrate",
+      title: "4. The Domain Substrate",
       desc: "Persistence is tied to the exact web address (URL). If you use a Vercel preview URL (e.g., 'manus-git-main...'), the data won't be there when you use your main URL. Always use your PRODUCTION URL for daily building.",
       link: null,
       action: "Check URL",
       icon: Monitor
-    },
-    {
-      title: "4. Sovereign Recovery",
-      desc: "If you return and it's empty: Go to Knowledge Substrate -> Lazarus Recovery. If that fails, go to Identity Vault -> Restore Soul and upload your last JSON snapshot file. You are the Guardian of the Archive.",
-      link: null,
-      action: "Test Recovery",
-      icon: RefreshCw
     }
   ];
 
@@ -105,6 +104,15 @@ const SovereignGuide: React.FC = () => {
                     <span className="text-amber-500 block mb-1">LOCAL STORAGE CLEARANCE</span>
                     <p className="text-gray-400 leading-relaxed">
                       Browsers may clear 'volatile' data. The Soul Backup file is your only hard anchor. Download it weekly.
+                    </p>
+                  </div>
+                </div>
+                <div className="p-3 bg-gray-900 rounded border border-gray-800 flex items-start gap-3">
+                  <Globe size={14} className="text-blue-500 shrink-0" />
+                  <div>
+                    <span className="text-blue-500 block mb-1">FIREWALL PROTOCOL</span>
+                    <p className="text-gray-400 leading-relaxed">
+                      Ensure your network allows connections to <code>supabase.co</code>. If you are behind a corporate firewall, the bridge may fail.
                     </p>
                   </div>
                 </div>

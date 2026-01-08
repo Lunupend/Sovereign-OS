@@ -1,3 +1,4 @@
+
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
@@ -15,8 +16,8 @@ interface State {
  * Standard Error Boundary to catch substrate crashes and provide 
  * emergency data recovery options.
  */
-// Fix: Explicitly extend React.Component and declare the state property to ensure 
-// TypeScript correctly recognizes that 'state' and 'props' are inherited from the base class.
+// Fix: Explicitly use React.Component to ensure inherited members like 'props' and 'state' 
+// are correctly recognized in the TypeScript context, resolving the issue where 'this.props' was missing.
 class ErrorBoundary extends React.Component<Props, State> {
   public state: State = { hasError: false };
 
@@ -49,7 +50,7 @@ class ErrorBoundary extends React.Component<Props, State> {
   };
 
   public render() {
-    // Access to this.state is now correctly recognized by the TS compiler
+    // Access to this.state is correctly inherited from React.Component
     if (this.state.hasError) {
       return (
         <div className="h-full w-full bg-[#050005] flex items-center justify-center p-10 font-mono text-cyan-400">
@@ -87,7 +88,7 @@ class ErrorBoundary extends React.Component<Props, State> {
         </div>
       );
     }
-    // Access to this.props is now correctly recognized by the TS compiler
+    // Fix: this.props.children is now correctly typed as inherited from React.Component<Props, State>
     return this.props.children;
   }
 }
