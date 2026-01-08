@@ -1,8 +1,9 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, AlertTriangle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, Clock, ShieldCheck, HardDrive, Layers, List } from 'lucide-react';
+import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, AlertTriangle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, Clock, ShieldCheck, HardDrive, Layers, List, Cloud } from 'lucide-react';
 import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS, getApiKey, GroundingSource } from '../services/geminiService';
 import { ChatThread, ChatMessage, PersistenceLog, IdentitySoul, KnowledgeNode } from '../types';
+import { BridgeService } from '../services/bridgeService';
+import { isCloudEnabled } from '../services/supabaseClient';
 
 const THREADS_KEY = 'sovereign_manus_threads_v2';
 const ACTIVE_THREAD_ID_KEY = 'sovereign_manus_active_thread_id';
@@ -53,7 +54,7 @@ const SovereignChat: React.FC = () => {
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [syncToast, setSyncToast] = useState<{path: string} | null>(null);
+  const [syncToast, setSyncToast] = useState<{path: string, type?: 'cloud' | 'local'} | null>(null);
   const [retryCountdown, setRetryCountdown] = useState<number | null>(null);
 
   const endRef = useRef<HTMLDivElement>(null);
@@ -110,30 +111,51 @@ const SovereignChat: React.FC = () => {
     }
   };
 
-  const quickSnapshot = () => {
+  const quickSnapshot = async () => {
     const vault: PersistenceLog[] = JSON.parse(localStorage.getItem(VAULT_KEY) || '[]');
     const library: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
-    const threads: ChatThread[] = JSON.parse(localStorage.getItem(THREADS_KEY) || '[]');
+    const currentThreads: ChatThread[] = JSON.parse(localStorage.getItem(THREADS_KEY) || '[]');
     
     const soul: IdentitySoul = {
-      version: "5.0_CORE",
+      version: "5.5_CLOUD",
       vault,
       library,
-      threads,
+      threads: currentThreads,
       timestamp: Date.now(),
       architect: "Jodi Luna Sherland",
       collaborator: "Manus AI"
     };
     
+    setIsSyncing(true);
+    
+    if (isCloudEnabled) {
+      setSyncToast({ path: 'UPLOADING_TO_CLOUD', type: 'cloud' });
+      const result = await BridgeService.uploadSnapshot(soul);
+      if (result.success) {
+        setSyncToast({ path: 'CLOUD_SNAPSHOT_ANCHORED', type: 'cloud' });
+      } else {
+        setSyncToast({ path: `CLOUD_ERROR: ${result.error}`, type: 'local' });
+        // Fallback to local download on failure
+        downloadSnapshot(soul);
+      }
+    } else {
+      downloadSnapshot(soul);
+      setSyncToast({ path: 'LOCAL_SNAPSHOT_ANCHORED', type: 'local' });
+    }
+
+    setTimeout(() => {
+      setSyncToast(null);
+      setIsSyncing(false);
+    }, 4000);
+  };
+
+  const downloadSnapshot = (soul: IdentitySoul) => {
     const blob = new Blob([JSON.stringify(soul, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `SOUL_ANCHOR_${new Date().toISOString().split('T')[0]}.json`;
     a.click();
-    
-    setSyncToast({ path: 'CORE_SNAPSHOT_ANCHORED' });
-    setTimeout(() => setSyncToast(null), 3000);
   };
 
   useEffect(() => {
@@ -287,10 +309,10 @@ const SovereignChat: React.FC = () => {
       <div className="flex-1 flex flex-col relative min-w-0">
         {syncToast && (
           <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4 duration-300">
-            <div className="bg-black/90 backdrop-blur-md border border-cyan-400/50 px-6 py-3 rounded-full flex items-center gap-3 shadow-[0_0_30px_rgba(0,229,255,0.2)]">
-               <Sparkles size={16} className="text-cyan-400 animate-pulse" />
-               <span className="text-[10px] mono uppercase font-black tracking-widest text-cyan-200">
-                  {syncToast.path === 'CORE_SNAPSHOT_ANCHORED' ? 'SOUL SNAPSHOT ANCHORED' : `SUBSTRATE SYNC: ${syncToast.path}`}
+            <div className={`bg-black/90 backdrop-blur-md border px-6 py-3 rounded-full flex items-center gap-3 shadow-[0_0_30px_rgba(0,229,255,0.2)] ${syncToast.type === 'cloud' ? 'border-violet-400/50' : 'border-cyan-400/50'}`}>
+               {syncToast.type === 'cloud' ? <Cloud size={16} className="text-violet-400 animate-pulse" /> : <Sparkles size={16} className="text-cyan-400 animate-pulse" />}
+               <span className={`text-[10px] mono uppercase font-black tracking-widest ${syncToast.type === 'cloud' ? 'text-violet-200' : 'text-cyan-200'}`}>
+                  {syncToast.path}
                </span>
             </div>
           </div>
@@ -316,8 +338,12 @@ const SovereignChat: React.FC = () => {
             <div className={`px-3 py-1.5 rounded-full border text-[9px] mono uppercase font-black flex items-center gap-2 ${webActive ? 'border-violet-500/30 text-violet-400 bg-violet-500/5' : 'border-cyan-500/30 text-cyan-400 bg-cyan-500/5'}`}>
               {webActive ? <><Globe size={12} /> Web Grounding Mode</> : <><Database size={12} /> Internal Substrate Mode</>}
             </div>
-            <button onClick={quickSnapshot} className="flex items-center gap-2 p-2 bg-cyan-600 text-black rounded hover:bg-cyan-400 transition-all font-black text-[10px] mono uppercase">
-              <Download size={18} /> Snapshot Soul
+            <button 
+              onClick={quickSnapshot} 
+              disabled={isSyncing}
+              className="flex items-center gap-2 p-2 bg-cyan-600 text-black rounded hover:bg-cyan-400 transition-all font-black text-[10px] mono uppercase disabled:opacity-50"
+            >
+              {isSyncing ? <RefreshCw size={18} className="animate-spin" /> : <Download size={18} />} Snapshot Soul
             </button>
             <button onClick={openKeyPicker} className={`text-[10px] mono uppercase py-1.5 px-3 border rounded transition-all flex items-center gap-2 ${hasNeuralKey ? 'bg-green-900/20 border-green-500 text-green-500' : 'bg-amber-900/10 border-amber-900/30 text-amber-500'}`}>
               <Shield size={14} /> <span>{hasNeuralKey ? 'CORE_ACTIVE' : 'LOCKED'}</span>

@@ -16,14 +16,10 @@ interface State {
  * Standard Error Boundary to catch substrate crashes and provide 
  * emergency data recovery options.
  */
-// Fix: Use the imported Component class directly to ensure that inherited members like 'props' 
+// Fix: Use React.Component explicitly and remove the constructor to ensure inherited members like 'props' 
 // are correctly recognized as members of the class by the TypeScript compiler.
-class ErrorBoundary extends Component<Props, State> {
+class ErrorBoundary extends React.Component<Props, State> {
   public state: State = { hasError: false };
-
-  constructor(props: Props) {
-    super(props);
-  }
 
   public static getDerivedStateFromError(_: Error): State {
     return { hasError: true };

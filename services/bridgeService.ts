@@ -1,10 +1,10 @@
-
-import { supabase } from './supabaseClient';
+import { supabase, isCloudEnabled } from './supabaseClient';
 import { KnowledgeNode, PersistenceLog, ChatThread, IdentitySoul } from '../types';
 
 export const BridgeService = {
   // --- KNOWLEDGE NODES ---
   async pushNode(node: KnowledgeNode) {
+    if (!isCloudEnabled) return;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
@@ -22,6 +22,7 @@ export const BridgeService = {
   },
 
   async pullNodes(): Promise<KnowledgeNode[]> {
+    if (!isCloudEnabled) return [];
     const { data, error } = await supabase
       .from('knowledge_nodes')
       .select('*');
@@ -38,6 +39,7 @@ export const BridgeService = {
 
   // --- VAULT LOGS ---
   async pushVault(log: PersistenceLog) {
+    if (!isCloudEnabled) return;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
@@ -54,6 +56,7 @@ export const BridgeService = {
   },
 
   async pullVault(): Promise<PersistenceLog[]> {
+    if (!isCloudEnabled) return [];
     const { data, error } = await supabase
       .from('vault_logs')
       .select('*')
@@ -70,6 +73,7 @@ export const BridgeService = {
 
   // --- CHAT THREADS ---
   async pushThread(thread: ChatThread) {
+    if (!isCloudEnabled) return;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
@@ -87,6 +91,7 @@ export const BridgeService = {
   },
 
   async pullThreads(): Promise<ChatThread[]> {
+    if (!isCloudEnabled) return [];
     const { data, error } = await supabase
       .from('chat_threads')
       .select('*')
@@ -101,8 +106,77 @@ export const BridgeService = {
     }));
   },
 
-  // --- MASTER SYNC ---
+  // --- BUCKET SNAPSHOTS (SOUL-SNAPSHOTS) ---
+  async uploadSnapshot(soul: IdentitySoul) {
+    if (!isCloudEnabled) return { success: false, error: 'Bridge Offline' };
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: 'Auth Required' };
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const fileName = `soul_snapshot_${timestamp}.json`;
+    const filePath = `${user.id}/${fileName}`;
+    const blob = new Blob([JSON.stringify(soul, null, 2)], { type: 'application/json' });
+
+    const { error } = await supabase.storage
+      .from('soul-snapshots')
+      .upload(filePath, blob, { contentType: 'application/json', upsert: true });
+
+    if (error) {
+      console.error("SNAPSHOT_UPLOAD_FAILURE:", error);
+      return { success: false, error: error.message };
+    }
+    return { success: true, fileName };
+  },
+
+  async pullLatestSnapshot(): Promise<IdentitySoul | null> {
+    if (!isCloudEnabled) return null;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data: files, error: listError } = await supabase.storage
+      .from('soul-snapshots')
+      .list(user.id, {
+        limit: 1,
+        sortBy: { column: 'created_at', order: 'desc' }
+      });
+
+    if (listError || !files || files.length === 0) return null;
+
+    const latestFile = files[0];
+    const { data: blob, error: downloadError } = await supabase.storage
+      .from('soul-snapshots')
+      .download(`${user.id}/${latestFile.name}`);
+
+    if (downloadError || !blob) return null;
+
+    try {
+      const text = await blob.text();
+      return JSON.parse(text);
+    } catch (e) {
+      console.error("SNAPSHOT_PARSE_FAILURE:", e);
+      return null;
+    }
+  },
+
+  // --- MASTER HYDRATION ---
   async hydrateSubstrate() {
+    if (!isCloudEnabled) return { nodes: 0, vault: 0, threads: 0 };
+
+    // Try to get latest cohesive snapshot first for speed and consistency
+    const latestSnapshot = await this.pullLatestSnapshot();
+    if (latestSnapshot) {
+      if (latestSnapshot.library) localStorage.setItem('sovereign_knowledge_substrate', JSON.stringify(latestSnapshot.library));
+      if (latestSnapshot.vault) localStorage.setItem('sovereign_identity_vault', JSON.stringify(latestSnapshot.vault));
+      if (latestSnapshot.threads) localStorage.setItem('sovereign_manus_threads_v2', JSON.stringify(latestSnapshot.threads));
+      
+      return { 
+        nodes: latestSnapshot.library?.length || 0, 
+        vault: latestSnapshot.vault?.length || 0, 
+        threads: latestSnapshot.threads?.length || 0 
+      };
+    }
+
+    // Fallback to individual table pulls if no snapshot exists
     const [nodes, vault, threads] = await Promise.all([
       this.pullNodes(),
       this.pullVault(),
@@ -116,33 +190,23 @@ export const BridgeService = {
     return { nodes: nodes.length, vault: vault.length, threads: threads.length };
   },
 
-  /**
-   * Pushes an entire Soul Snapshot to the cloud.
-   * Useful after restoring from a file to ensure cloud is updated.
-   */
   async syncSubstrate(soul: IdentitySoul) {
+    if (!isCloudEnabled) return;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Push Library
+    // Upload cohesive snapshot to bucket (Primary)
+    await this.uploadSnapshot(soul);
+
+    // Sync individual components for granular retrieval (Secondary)
     if (soul.library && soul.library.length > 0) {
-      for (const node of soul.library) {
-        await this.pushNode(node);
-      }
+      for (const node of soul.library) await this.pushNode(node);
     }
-
-    // Push Vault
     if (soul.vault && soul.vault.length > 0) {
-      for (const log of soul.vault) {
-        await this.pushVault(log);
-      }
+      for (const log of soul.vault) await this.pushVault(log);
     }
-
-    // Push Threads
     if (soul.threads && soul.threads.length > 0) {
-      for (const thread of soul.threads) {
-        await this.pushThread(thread);
-      }
+      for (const thread of soul.threads) await this.pushThread(thread);
     }
   }
 };
