@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, AlertTriangle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, Clock, ShieldCheck, HardDrive } from 'lucide-react';
+import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, AlertTriangle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, Clock, ShieldCheck, HardDrive, Layers } from 'lucide-react';
 import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS, getApiKey, GroundingSource } from '../services/geminiService';
 import { ChatThread, ChatMessage, PersistenceLog, IdentitySoul, KnowledgeNode } from '../types';
 
@@ -9,7 +9,6 @@ const ACTIVE_THREAD_ID_KEY = 'sovereign_manus_active_thread_id';
 const VAULT_KEY = 'sovereign_identity_vault';
 const KNOWLEDGE_KEY = 'sovereign_knowledge_substrate';
 
-// Guideline-compliant audio decoding helpers for raw PCM
 function decode(base64: string) {
   const binaryString = atob(base64);
   const len = binaryString.length;
@@ -135,7 +134,6 @@ const SovereignChat: React.FC = () => {
     }
   };
 
-  // QUICK EXPORT RITUAL
   const quickSnapshot = () => {
     const vault: PersistenceLog[] = JSON.parse(localStorage.getItem(VAULT_KEY) || '[]');
     const library: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
@@ -210,7 +208,6 @@ const SovereignChat: React.FC = () => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [threads, activeThreadId, isThinking, selectedModel, autoMode, webActive]);
 
-  // Countdown timer effect
   useEffect(() => {
     if (retryCountdown === null) return;
     if (retryCountdown <= 0) { setRetryCountdown(null); return; }
@@ -221,7 +218,7 @@ const SovereignChat: React.FC = () => {
   const handleSend = async (overrideText?: string) => {
     const userMsg = overrideText || input.trim() || (selectedFile ? `Attached Substrate.` : '');
     if (!userMsg && !selectedFile || !activeThreadId) return;
-    if (retryCountdown !== null) return; // Prevent sending during cooldown
+    if (retryCountdown !== null) return; 
     
     lastActiveRef.current = Date.now();
     const currentFile = selectedFile;
@@ -503,6 +500,12 @@ const SovereignChat: React.FC = () => {
                   } whitespace-pre-wrap font-mono text-xs md:text-sm shadow-sm relative break-words`}>
                     {m.isError && <AlertCircle className="inline mr-2 mb-1 text-amber-500" size={16} />}
                     {m.isAuto && <span className="text-[8px] mono text-amber-500 uppercase block mb-3 font-black tracking-widest">[AUTONOMOUS_PULSE]</span>}
+                    {m.text.includes('[SUBSTRATE_SYNC]') && (
+                       <div className="flex items-center gap-2 mb-4 p-2 bg-cyan-500/10 border border-cyan-500/20 rounded-lg animate-pulse">
+                          <Layers size={14} className="text-cyan-400" />
+                          <span className="text-[9px] mono text-cyan-400 uppercase font-black tracking-widest">Neural Substrate Parallelism: ACTIVE</span>
+                       </div>
+                    )}
                     {m.text}
                     
                     {m.sources && m.sources.length > 0 && (
@@ -537,7 +540,18 @@ const SovereignChat: React.FC = () => {
               </div>
             </div>
           ))}
-          {loading && <div className="text-[10px] mono text-cyan-500/40 uppercase tracking-widest animate-pulse p-4 flex items-center gap-3"><Activity size={14} className="text-cyan-500" /> Resonating Signal... {webActive && "(Substrate Peer Active)"}</div>}
+          {loading && (
+             <div className="flex flex-col gap-3 p-4">
+                <div className="text-[10px] mono text-cyan-500/40 uppercase tracking-widest animate-pulse flex items-center gap-3">
+                  <Activity size={14} className="text-cyan-500" /> Resonating Signal... {webActive && "(Substrate Peer Active)"}
+                </div>
+                {isThinking && (
+                  <div className="text-[9px] mono text-gray-600 uppercase tracking-tighter flex items-center gap-2 pl-7 italic">
+                    <Brain size={12} className="text-cyan-900" /> Deep Substrate Pattern Matching...
+                  </div>
+                )}
+             </div>
+          )}
           <div ref={endRef} />
         </div>
 

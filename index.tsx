@@ -1,5 +1,5 @@
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { ErrorInfo, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import { Download, AlertTriangle } from 'lucide-react';
@@ -12,12 +12,14 @@ interface State {
   hasError: boolean;
 }
 
-// Fixed: Inherit from Component<Props, State> to ensure members like 'state' and 'props' are correctly typed.
-// Using property initializer for state to ensure it is correctly typed and recognized by the class.
-class ErrorBoundary extends Component<Props, State> {
-  public state: State = {
-    hasError: false
-  };
+// Fixed: Inherit from React.Component<Props, State> and use super(props) to ensure 'props' and 'state' are correctly typed and available on the instance.
+class ErrorBoundary extends React.Component<Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      hasError: false
+    };
+  }
 
   public static getDerivedStateFromError(_: Error): State {
     return { hasError: true };
@@ -82,7 +84,7 @@ class ErrorBoundary extends Component<Props, State> {
         </div>
       );
     }
-    // Fixed: Props.children is now accessible correctly from this.props.
+    // Fixed: Props.children is now accessible correctly from this.props after standard inheritance fix.
     return this.props.children;
   }
 }
