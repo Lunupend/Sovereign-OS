@@ -1,5 +1,4 @@
-
-import React, { ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import { Download, AlertTriangle } from 'lucide-react';
@@ -12,14 +11,15 @@ interface State {
   hasError: boolean;
 }
 
-// Fixed: Explicitly extend React.Component to ensure 'props' and 'state' are correctly recognized by the TypeScript compiler.
-class ErrorBoundary extends React.Component<Props, State> {
+// Fixed: Use named import 'Component' and ensure proper type parameters for the class.
+class ErrorBoundary extends Component<Props, State> {
+  // Fixed: Initialize state as a class property to ensure it's correctly recognized by the TypeScript compiler.
+  public state: State = {
+    hasError: false
+  };
+
   constructor(props: Props) {
     super(props);
-    // Fixed: Initialize state using 'this.state' inherited from React.Component.
-    this.state = {
-      hasError: false
-    };
   }
 
   public static getDerivedStateFromError(_: Error): State {
@@ -47,7 +47,7 @@ class ErrorBoundary extends React.Component<Props, State> {
   };
 
   public render() {
-    // Fixed: Correctly access state via 'this.state' which is now properly typed on the class instance.
+    // Fixed: Correctly access state via 'this.state' which is now properly inherited and recognized.
     if (this.state.hasError) {
       return (
         <div className="h-full w-full bg-[#050005] flex items-center justify-center p-10 font-mono text-cyan-400">
@@ -85,7 +85,7 @@ class ErrorBoundary extends React.Component<Props, State> {
         </div>
       );
     }
-    // Fixed: Correctly access children from 'this.props' after establishing proper inheritance.
+    // Fixed: Correctly access children from 'this.props' after establishing proper inheritance with the Component generic.
     return this.props.children;
   }
 }

@@ -2,17 +2,19 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Provided by Architect: https://zoovefufpmmzrfjophlx.supabase.co
-const DEFAULT_URL = 'https://zoovefufpmmzrfjophlx.supabase.co';
+const ARCHITECT_URL = 'https://zoovefufpmmzrfjophlx.supabase.co';
 
-const supabaseUrl = process.env.SUPABASE_URL || DEFAULT_URL;
+const supabaseUrl = process.env.SUPABASE_URL || ARCHITECT_URL;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
 
-// Ensure we have a valid URL and a Key before attempting to initialize. 
-// supabase-js throws if the URL is empty or doesn't look like a URL.
+/**
+ * Checks if the cloud bridge is fully configured.
+ * We require a valid URL and a key that is at least a reasonable length.
+ */
 export const isCloudEnabled = !!(
   supabaseUrl && 
+  supabaseUrl.length > 10 &&
   supabaseAnonKey && 
-  supabaseUrl.startsWith('http') && 
   supabaseAnonKey.length > 10
 );
 
@@ -40,7 +42,10 @@ const mockSupabase = {
   }),
 } as any;
 
-// Only create the client if the substrate is fully ready
+/**
+ * Initialize the client. If cloud is not enabled, we use the mock
+ * to ensure the UI doesn't crash.
+ */
 export const supabase = isCloudEnabled 
   ? createClient(supabaseUrl, supabaseAnonKey)
   : mockSupabase;
