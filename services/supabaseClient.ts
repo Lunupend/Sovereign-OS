@@ -1,11 +1,10 @@
-
 import { createClient } from '@supabase/supabase-js';
 
-// Provided by Architect: https://zoovefufpmmzrfjophlx.supabase.co
-const ARCHITECT_URL = 'https://zoovefufpmmzrfjophlx.supabase.co';
+// Fallback architect URL if none is provided
+const FALLBACK_URL = 'https://zoovefufpmmzrfjophlx.supabase.co';
 
-const supabaseUrl = process.env.SUPABASE_URL || ARCHITECT_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || FALLBACK_URL;
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
 
 /**
  * Checks if the cloud bridge is fully configured.
@@ -18,7 +17,10 @@ export const isCloudEnabled = !!(
   supabaseAnonKey.length > 10
 );
 
-// A stub implementation to prevent runtime crashes when cloud persistence is not configured
+/**
+ * A stub implementation to prevent runtime crashes when cloud persistence is not configured.
+ * This ensures the app still "works" locally even if the bridge is down.
+ */
 const mockSupabase = {
   auth: {
     getSession: async () => ({ data: { session: null }, error: null }),

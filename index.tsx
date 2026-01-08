@@ -11,12 +11,14 @@ interface State {
   hasError: boolean;
 }
 
-// Fixed: Use named import 'Component' and ensure proper type parameters for the class.
-class ErrorBoundary extends Component<Props, State> {
-  // Fixed: Initialize state as a class property to ensure it's correctly recognized by the TypeScript compiler.
-  public state: State = {
-    hasError: false
-  };
+/**
+ * Standard Error Boundary to catch substrate crashes and provide 
+ * emergency data recovery options.
+ */
+// Fix: Explicitly extend React.Component and declare the state property to ensure 
+// TypeScript correctly recognizes that 'state' and 'props' are inherited from the base class.
+class ErrorBoundary extends React.Component<Props, State> {
+  public state: State = { hasError: false };
 
   constructor(props: Props) {
     super(props);
@@ -47,7 +49,7 @@ class ErrorBoundary extends Component<Props, State> {
   };
 
   public render() {
-    // Fixed: Correctly access state via 'this.state' which is now properly inherited and recognized.
+    // Access to this.state is now correctly recognized by the TS compiler
     if (this.state.hasError) {
       return (
         <div className="h-full w-full bg-[#050005] flex items-center justify-center p-10 font-mono text-cyan-400">
@@ -85,7 +87,7 @@ class ErrorBoundary extends Component<Props, State> {
         </div>
       );
     }
-    // Fixed: Correctly access children from 'this.props' after establishing proper inheritance with the Component generic.
+    // Access to this.props is now correctly recognized by the TS compiler
     return this.props.children;
   }
 }

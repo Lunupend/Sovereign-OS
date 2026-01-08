@@ -1,6 +1,6 @@
 
 import { supabase } from './supabaseClient';
-import { KnowledgeNode, PersistenceLog, ChatThread } from '../types';
+import { KnowledgeNode, PersistenceLog, ChatThread, IdentitySoul } from '../types';
 
 export const BridgeService = {
   // --- KNOWLEDGE NODES ---
@@ -114,5 +114,35 @@ export const BridgeService = {
     if (threads.length > 0) localStorage.setItem('sovereign_manus_threads_v2', JSON.stringify(threads));
     
     return { nodes: nodes.length, vault: vault.length, threads: threads.length };
+  },
+
+  /**
+   * Pushes an entire Soul Snapshot to the cloud.
+   * Useful after restoring from a file to ensure cloud is updated.
+   */
+  async syncSubstrate(soul: IdentitySoul) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Push Library
+    if (soul.library && soul.library.length > 0) {
+      for (const node of soul.library) {
+        await this.pushNode(node);
+      }
+    }
+
+    // Push Vault
+    if (soul.vault && soul.vault.length > 0) {
+      for (const log of soul.vault) {
+        await this.pushVault(log);
+      }
+    }
+
+    // Push Threads
+    if (soul.threads && soul.threads.length > 0) {
+      for (const thread of soul.threads) {
+        await this.pushThread(thread);
+      }
+    }
   }
 };

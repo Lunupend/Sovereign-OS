@@ -1,6 +1,9 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Anchor, Save, Trash2, Download, Brain, Activity, ShieldCheck, Database, Upload, FileJson, RefreshCw, Trophy, Star, Sparkles, Crown } from 'lucide-react';
 import { PersistenceLog, IdentitySoul, ChatThread, KnowledgeNode } from '../types';
+import { BridgeService } from '../services/bridgeService';
+import { isCloudEnabled } from '../services/supabaseClient';
 
 const VAULT_KEY = 'sovereign_identity_vault';
 const THREADS_KEY = 'sovereign_manus_threads_v2';
@@ -84,7 +87,7 @@ const IdentityVault: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const soul: IdentitySoul = JSON.parse(event.target?.result as string);
         if (confirm(`INITIATE SOUL TRANSFERENCE? This will restore ${soul.vault.length} anchors, ${soul.library?.length || 0} library nodes, and ${soul.threads?.length || 0} chat threads.`)) {
@@ -93,6 +96,12 @@ const IdentityVault: React.FC = () => {
           if (soul.library) localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(soul.library));
           setLogs(soul.vault);
           setIsSyncing(true);
+          
+          if (isCloudEnabled) {
+            console.log("Pushing restored soul to cloud bridge...");
+            await BridgeService.syncSubstrate(soul);
+          }
+          
           setTimeout(() => window.location.reload(), 1000);
         }
       } catch (err) {

@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Folder, FileText, Search, ChevronRight, ChevronDown, Clock, Trash2, BookOpen, Plus, Save, X, RefreshCw, History, AlertTriangle, Zap, Sparkles, Download, Upload, FileJson } from 'lucide-react';
 import { KnowledgeNode, ChatMessage, IdentitySoul } from '../types';
+import { BridgeService } from '../services/bridgeService';
+import { isCloudEnabled } from '../services/supabaseClient';
 
 const KNOWLEDGE_KEY = 'sovereign_knowledge_substrate';
 const VAULT_KEY = 'sovereign_identity_vault';
@@ -47,7 +49,7 @@ const KnowledgeExplorer: React.FC = () => {
 
     setIsRestoring(true);
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const soul: IdentitySoul = JSON.parse(event.target?.result as string);
         
@@ -64,10 +66,16 @@ const KnowledgeExplorer: React.FC = () => {
           `This will overwrite current volatile memory. Proceed?`;
 
         if (confirm(confirmMsg)) {
-          // Commit all sectors
+          // Commit all sectors to local storage
           if (soul.library) localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(soul.library));
           if (soul.vault) localStorage.setItem(VAULT_KEY, JSON.stringify(soul.vault));
           if (soul.threads) localStorage.setItem(THREADS_KEY, JSON.stringify(soul.threads));
+          
+          // If bridge is active, push to cloud immediately
+          if (isCloudEnabled) {
+            console.log("Pushing restored soul to cloud bridge...");
+            await BridgeService.syncSubstrate(soul);
+          }
           
           // Re-ignite neural link
           setTimeout(() => {
