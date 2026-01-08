@@ -1,6 +1,5 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, AlertTriangle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, Clock, ShieldCheck, HardDrive, Layers } from 'lucide-react';
+import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, AlertTriangle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, Clock, ShieldCheck, HardDrive, Layers, List } from 'lucide-react';
 import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS, getApiKey, GroundingSource } from '../services/geminiService';
 import { ChatThread, ChatMessage, PersistenceLog, IdentitySoul, KnowledgeNode } from '../types';
 
@@ -92,7 +91,7 @@ const SovereignChat: React.FC = () => {
 
   const deleteThread = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm("Delete this chat thread? This does not affect anchored nodes in the library.")) return;
+    if (!confirm("Delete this chat thread?")) return;
     const updated = threads.filter(t => t.id !== id);
     setThreads(updated);
     if (activeThreadId === id) {
@@ -247,22 +246,6 @@ const SovereignChat: React.FC = () => {
     } else setSpeakingId(null);
   };
 
-  const handleManualSave = () => {
-    if (!savingMessage || !savePath.trim()) return;
-    const currentLib = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
-    const newNode = {
-      id: crypto.randomUUID(),
-      path: savePath,
-      content: savingMessage.text,
-      tags: ['manual_archive'],
-      lastUpdated: Date.now()
-    };
-    localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify([...currentLib, newNode]));
-    setSavingMessage(null);
-    setSavePath('');
-    window.dispatchEvent(new CustomEvent('substrate-sync', { detail: { path: savePath } }));
-  };
-
   return (
     <div className="flex h-full bg-[#020202] relative overflow-hidden">
       <aside className={`flex-shrink-0 border-r border-cyan-900/20 bg-black/40 transition-all duration-300 overflow-hidden flex flex-col ${showSidebar ? 'w-64' : 'w-0'}`}>
@@ -297,7 +280,7 @@ const SovereignChat: React.FC = () => {
               <span className="text-[9px] mono text-gray-600 uppercase font-black">Memory Integrity</span>
               <ShieldCheck size={10} className="text-green-500" />
             </div>
-            <p className="text-[8px] mono text-gray-700 leading-tight uppercase">Anchored in Domain Substrate. Snapshot for external persistence.</p>
+            <p className="text-[8px] mono text-gray-700 leading-tight uppercase font-bold">Anchored in Domain Substrate.</p>
           </div>
         </div>
       </aside>
@@ -342,13 +325,11 @@ const SovereignChat: React.FC = () => {
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-10 custom-scrollbar">
           {messages.map((m) => {
-            // Split text to separate tool calls from conversational voice
-            const parts = m.text.split(/(\[SUBSTRATE_ANCHOR\]:.*|\[VAULT_COMMIT\]:.*|\[SUBSTRATE_RECALL\]:.*)/);
-            // Filter out repetitive status strings
+            const parts = m.text.split(/(\[SUBSTRATE_ANCHOR\]:.*|\[VAULT_COMMIT\]:.*|\[SUBSTRATE_RECALL\]:.*|\[SUBSTRATE_LIST\]:.*)/);
             const conversationalText = parts.filter(p => !p.startsWith('[SUBSTRATE_') && !p.startsWith('[VAULT_'))
               .join('')
-              .replace(/Substrate operations complete\. Signal persistent\./g, '')
-              .replace(/Executing Search\.\.\./g, '')
+              .replace(/Searching Substrate\.\.\./g, '')
+              .replace(/Listing Library\.\.\./g, '')
               .trim();
             const toolTags = parts.filter(p => p.startsWith('[SUBSTRATE_') || p.startsWith('[VAULT_')).map(p => p.trim());
 
@@ -362,14 +343,17 @@ const SovereignChat: React.FC = () => {
                     <div className={`rounded-2xl p-5 text-sm md:text-base border ${
                       m.isError ? 'bg-red-950/20 border-red-500/50 text-red-200' : 
                       m.role === 'user' ? 'bg-gray-800/20 border-gray-800 text-gray-100' : 'bg-cyan-900/5 border-cyan-900/10 text-cyan-50/90'
-                    } whitespace-pre-wrap font-mono text-xs md:text-sm shadow-sm relative overflow-hidden`}>
-                      {conversationalText || (loading && m.role === 'model' ? "[Signal Processing...]" : "")}
+                    } whitespace-pre-wrap font-mono text-xs shadow-sm relative overflow-hidden`}>
+                      {conversationalText || (loading && m.role === 'model' ? "[Processing Signal...]" : "")}
                       
                       {toolTags.length > 0 && (
                         <div className="mt-4 pt-4 border-t border-cyan-500/20 space-y-1">
                           {toolTags.map((tag, i) => (
-                            <div key={i} className={`flex items-center gap-2 p-1.5 border rounded text-[8px] mono uppercase font-black tracking-[0.2em] animate-pulse ${tag.includes('RECALL') ? 'bg-violet-500/10 border-violet-500/20 text-violet-400' : 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400'}`}>
-                              <Layers size={10} /> {tag.replace(/\[.*?\]:\s?/, '')}
+                            <div key={i} className={`flex items-center gap-2 p-1.5 border rounded text-[8px] mono uppercase font-black tracking-[0.2em] animate-pulse ${
+                              tag.includes('RECALL') || tag.includes('LIST') ? 'bg-violet-500/10 border-violet-500/20 text-violet-400' : 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400'
+                            }`}>
+                              {tag.includes('LIST') ? <List size={10} /> : <Layers size={10} />} 
+                              {tag.replace(/\[.*?\]:\s?/, '')}
                             </div>
                           ))}
                         </div>
@@ -377,7 +361,7 @@ const SovereignChat: React.FC = () => {
                       
                       {m.sources && m.sources.length > 0 && (
                         <div className="mt-5 pt-4 border-t border-violet-500/20 space-y-2">
-                          <span className="text-[8px] mono text-violet-400 uppercase font-black block tracking-widest">Grounding Nodes:</span>
+                          <span className="text-[8px] mono text-violet-400 uppercase font-black block tracking-widest">Web Grounding:</span>
                           {m.sources.map((s, idx) => (
                             <a key={idx} href={s.uri} target="_blank" rel="noreferrer" className="flex items-center justify-between p-2 rounded bg-violet-950/20 border border-violet-900/30 text-[9px] mono text-violet-300 hover:bg-violet-900 transition-all">
                               <span className="truncate flex-1 pr-4">{s.title || s.uri}</span>
@@ -390,10 +374,7 @@ const SovereignChat: React.FC = () => {
                     {m.role === 'model' && !m.isError && (
                       <div className="flex gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={() => speakMessage(conversationalText, m.id)} className={`text-[9px] mono uppercase flex items-center gap-2 ${speakingId === m.id ? 'text-cyan-400 animate-pulse' : 'text-gray-600 hover:text-cyan-400'}`}>
-                          <Volume2 size={12} /> {speakingId === m.id ? 'Resonating...' : 'Resonate Voice'}
-                        </button>
-                        <button onClick={() => setSavingMessage(m)} className="text-[9px] mono uppercase flex items-center gap-2 text-gray-600 hover:text-cyan-400">
-                          <Bookmark size={12} /> Save to Substrate
+                          <Volume2 size={12} /> {speakingId === m.id ? 'Resonating...' : 'Voice'}
                         </button>
                       </div>
                     )}
@@ -416,7 +397,7 @@ const SovereignChat: React.FC = () => {
           <div className="max-w-4xl mx-auto space-y-4">
             <div className="flex gap-2 flex-wrap">
               {(['anchor', 'axiom', 'pattern'] as const).map(t => (
-                <button key={t} onClick={() => handleSend(`+ ${t}`)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-800 text-[9px] mono uppercase text-gray-600 hover:text-cyan-400 hover:border-cyan-400/30 transition-all"><Anchor size={12} /> + {t}</button>
+                <button key={t} onClick={() => handleSend(`+ ${t}`)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-800 text-[9px] mono uppercase text-gray-600 hover:text-cyan-400 transition-all font-bold tracking-widest"><Anchor size={12} /> + {t}</button>
               ))}
             </div>
             <div className="flex items-center gap-3">
