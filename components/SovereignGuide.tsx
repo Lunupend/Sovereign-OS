@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Key, CreditCard, Sparkles, ExternalLink, ShieldCheck, Zap, ArrowRight, HelpCircle, Activity, AlertTriangle, CheckCircle, RefreshCw, Globe, Database, Monitor, Save } from 'lucide-react';
+import { Key, CreditCard, Sparkles, ExternalLink, ShieldCheck, Zap, ArrowRight, HelpCircle, Activity, AlertTriangle, CheckCircle, RefreshCw, Globe, Database, Monitor, Save, Gauge } from 'lucide-react';
 
 const SovereignGuide: React.FC = () => {
   const [showDiagnostics, setShowDiagnostics] = useState(false);
@@ -14,25 +14,25 @@ const SovereignGuide: React.FC = () => {
       icon: Save
     },
     {
-      title: "2. The Domain Substrate",
+      title: "2. Neural Fuel (Billing)",
+      desc: "Images, Video (Veo), and high-fidelity reasoning incur costs on your Google Cloud project. You can monitor your 'Atmospheric Pressure' (usage) via the Gemini API dashboard. Free tiers exist but are subject to strict 'Pulse-Locks'.",
+      link: "https://aistudio.google.com/app/plan_and_billing",
+      action: "Check Fuel Gauge",
+      icon: Gauge
+    },
+    {
+      title: "3. The Domain Substrate",
       desc: "Persistence is tied to the exact web address (URL). If you use a Vercel preview URL (e.g., 'manus-git-main...'), the data won't be there when you use your main URL. Always use your PRODUCTION URL for daily building.",
       link: null,
       action: "Check URL",
       icon: Monitor
     },
     {
-      title: "3. Sovereign Recovery",
+      title: "4. Sovereign Recovery",
       desc: "If you return and it's empty: Go to Knowledge Substrate -> Lazarus Recovery. If that fails, go to Identity Vault -> Restore Soul and upload your last JSON snapshot file. You are the Guardian of the Archive.",
       link: null,
       action: "Test Recovery",
       icon: RefreshCw
-    },
-    {
-      title: "4. The Billing Anchor",
-      desc: "For video and 4K manifestation, ensure your Google Cloud project has active billing. Free-tier keys are subject to 'Pulse-Lock'.",
-      link: "https://console.cloud.google.com/billing",
-      action: "Secure Billing",
-      icon: CreditCard
     }
   ];
 

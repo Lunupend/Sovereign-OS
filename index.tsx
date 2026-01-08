@@ -1,15 +1,23 @@
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { ErrorInfo, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
-import { Download, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Download, AlertTriangle } from 'lucide-react';
 
-interface Props { children: ReactNode; }
-interface State { hasError: boolean; }
+interface Props {
+  children: ReactNode;
+}
 
-// Fixed: Inherit from React.Component to ensure this.props is properly recognized by the TS compiler
+interface State {
+  hasError: boolean;
+}
+
+// Fixed: Inherit from React.Component<Props, State> to ensure members like 'state' and 'props' are correctly typed and recognized by TypeScript.
 class ErrorBoundary extends React.Component<Props, State> {
-  public state: State = { hasError: false };
+  constructor(props: Props) {
+    super(props);
+    this.state = { hasError: false };
+  }
 
   public static getDerivedStateFromError(_: Error): State {
     return { hasError: true };
@@ -36,6 +44,7 @@ class ErrorBoundary extends React.Component<Props, State> {
   };
 
   public render() {
+    // Fixed: State is now properly defined on the instance via standard React inheritance
     if (this.state.hasError) {
       return (
         <div className="h-full w-full bg-[#050005] flex items-center justify-center p-10 font-mono text-cyan-400">
@@ -73,7 +82,7 @@ class ErrorBoundary extends React.Component<Props, State> {
         </div>
       );
     }
-    // Fixed: Properly accessed children from this.props
+    // Fixed: Props.children is now accessible correctly from this.props
     return this.props.children;
   }
 }
@@ -83,6 +92,7 @@ if (container) {
   const root = createRoot(container);
   root.render(
     <React.StrictMode>
+      {/* Fixed: Wrapped correctly with ErrorBoundary, providing the required children prop */}
       <ErrorBoundary>
         <App />
       </ErrorBoundary>

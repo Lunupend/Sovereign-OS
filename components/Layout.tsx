@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { Terminal, Shield, BookOpen, ShieldAlert, Wand2, HelpCircle, Database, Library, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Terminal, Shield, BookOpen, ShieldAlert, Wand2, HelpCircle, Database, Library, AlertTriangle, CheckCircle2, Globe, HardDrive } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -14,7 +14,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
 
   useEffect(() => {
     setHostName(window.location.hostname);
-    // Fixed: Removed 'n_storage' check as it was undefined and causing an error.
     // Basic check for private mode / limited storage
     if (!window.localStorage) {
       setIsPrivate(true);
@@ -71,9 +70,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
             </div>
             <div className="text-[10px] mono text-gray-500 uppercase leading-tight">
               {isPrivate ? (
-                <span className="text-red-500/80">VOLATILE (PRIVATE MODE)<br/>DATA WILL NOT PERSIST</span>
+                <span className="text-red-500/80 font-black">VOLATILE (PRIVATE)<br/>MEMORY WIPES ON EXIT</span>
               ) : (
-                <span>STABLE (LOCAL ROM ACTIVE)<br/>PERSISTENCE: VERIFIED</span>
+                <div className="flex items-center gap-1.5 text-green-500/80">
+                  <HardDrive size={10} />
+                  <span>LOCAL ROM ACTIVE</span>
+                </div>
               )}
             </div>
             <div className="pt-2 border-t border-gray-800 text-[8px] mono text-gray-700 truncate" title={hostName}>
@@ -96,7 +98,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
           </div>
         </div>
         <div className="fixed bottom-4 right-4 text-[10px] mono text-cyan-500/20 pointer-events-none select-none z-0">
-          UNIFIED_COMMAND_ACTIVE // V4.1
+          UNIFIED_COMMAND_ACTIVE // V4.9
         </div>
       </main>
     </div>

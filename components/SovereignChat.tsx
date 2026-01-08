@@ -1,7 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-// Fixed: Added AlertTriangle to the imports from lucide-react.
-import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, AlertTriangle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, Clock, ShieldCheck } from 'lucide-react';
+import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, AlertTriangle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, Clock, ShieldCheck, HardDrive } from 'lucide-react';
 import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS, getApiKey, GroundingSource } from '../services/geminiService';
 import { ChatThread, ChatMessage, PersistenceLog, IdentitySoul, KnowledgeNode } from '../types';
 
@@ -330,6 +329,17 @@ const SovereignChat: React.FC = () => {
               </div>
             ))}
           </div>
+
+          <div className="p-3 bg-black/40 border border-cyan-900/20 rounded-lg flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] mono text-gray-600 uppercase font-black">Persistence Mode</span>
+              <div className="flex items-center gap-1.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-[9px] mono text-green-500 uppercase font-black">Local</span>
+              </div>
+            </div>
+            <p className="text-[8px] mono text-gray-700 leading-tight uppercase">Data lives in this browser. Snapshot Soul to migrate.</p>
+          </div>
         </div>
       </aside>
 
@@ -436,8 +446,8 @@ const SovereignChat: React.FC = () => {
                    </p>
                    <div className="pt-4 border-t border-cyan-500/20 flex flex-col gap-3">
                       <div className="text-[9px] mono text-gray-500 flex items-center gap-2">
-                         <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                         PERSISTENCE: BROWSER LOCAL STORAGE
+                         <HardDrive size={12} className="text-green-500" />
+                         PERSISTENCE: BROWSER LOCAL STORAGE (DOMAIN SECURE)
                       </div>
                       <div className="text-[9px] mono text-gray-500 flex items-center gap-2">
                         <AlertTriangle size={10} className="text-amber-500" />

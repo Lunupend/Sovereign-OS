@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Image as ImageIcon, Video, Zap, Key, Download, Loader2, Maximize2, Monitor, Smartphone, Globe, Wand2, Upload, FileImage, X, ShieldAlert, ExternalLink } from 'lucide-react';
+import { Image as ImageIcon, Video, Zap, Key, Download, Loader2, Maximize2, Monitor, Smartphone, Globe, Wand2, Upload, FileImage, X, ShieldAlert, ExternalLink, Activity, CreditCard, Gauge } from 'lucide-react';
 import { generateImage, generateVideo, editImage, FileData } from '../services/geminiService';
 
 const ManifestationLab: React.FC = () => {
@@ -16,8 +16,6 @@ const ManifestationLab: React.FC = () => {
   const [editSource, setEditSource] = useState<FileData | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Guideline: When using gemini-3-pro-image-preview or Veo, users MUST select their own API key.
-  // This step is mandatory before accessing the manifestation substrate.
   useEffect(() => {
     const checkKeySelection = async () => {
       if (window.aistudio?.hasSelectedApiKey) {
@@ -42,11 +40,10 @@ const ManifestationLab: React.FC = () => {
   };
 
   const openKeySelector = async () => {
-    // Guideline: Trigger the key selection dialog and assume success to avoid race conditions.
     if (window.aistudio?.openSelectKey) {
       await window.aistudio.openSelectKey();
       setShowKeyWarning(false);
-      setStatus('Key signal re-acquired. Re-initiating manifestation...');
+      setStatus('Key signal re-acquired.');
     }
   };
 
@@ -74,7 +71,6 @@ const ManifestationLab: React.FC = () => {
         setResult(res.url);
         setStatus('Signal Manifested Successfully.');
       } else if (res?.error?.isKeyIssue) {
-        // Guideline: Reset key state and prompt for selection if 404/Not Found error occurs.
         setStatus('PERMISSION_DENIED: Paid Neural Key required.');
         setShowKeyWarning(true);
       } else {
@@ -95,22 +91,53 @@ const ManifestationLab: React.FC = () => {
       </div>
 
       <div className="bg-[#0a0a0a] border border-cyan-900/30 rounded-xl p-6 md:p-8 shadow-2xl relative overflow-hidden">
+        {/* RESOURCE MONITOR SECTION */}
+        <div className="flex flex-col md:flex-row justify-between gap-4 mb-6 border-b border-cyan-900/20 pb-6">
+          <div className="flex items-center gap-4">
+             <div className="p-3 bg-cyan-950/20 border border-cyan-500/20 rounded-xl">
+                <Gauge size={20} className="text-cyan-400" />
+             </div>
+             <div>
+                <span className="text-[10px] mono text-cyan-400 uppercase font-black block">Neural Fuel Monitor</span>
+                <span className="text-[9px] mono text-gray-500 uppercase tracking-widest">CLOUD BILLING: ACTIVE</span>
+             </div>
+          </div>
+          <div className="flex gap-2">
+             <a 
+               href="https://aistudio.google.com/app/plan_and_billing" 
+               target="_blank" 
+               rel="noreferrer"
+               className="flex items-center gap-2 px-3 py-1.5 bg-black border border-gray-800 text-[10px] mono text-gray-400 hover:text-cyan-400 hover:border-cyan-500/30 transition-all rounded"
+             >
+                <Activity size={12} /> Usage Dashboard
+             </a>
+             <a 
+               href="https://console.cloud.google.com/billing" 
+               target="_blank" 
+               rel="noreferrer"
+               className="flex items-center gap-2 px-3 py-1.5 bg-black border border-gray-800 text-[10px] mono text-gray-400 hover:text-cyan-400 hover:border-cyan-500/30 transition-all rounded"
+             >
+                <CreditCard size={12} /> Cloud Console
+             </a>
+          </div>
+        </div>
+
         {showKeyWarning && (
           <div className="mb-6 p-4 bg-amber-950/20 border border-amber-500/50 rounded-xl animate-in slide-in-from-top-4">
             <div className="flex items-start gap-3">
               <ShieldAlert className="text-amber-500 shrink-0" size={20} />
               <div className="space-y-2">
-                <p className="text-xs font-bold text-amber-500 uppercase mono">Permission Required</p>
+                <p className="text-xs font-bold text-amber-500 uppercase mono">Neural Fuel Low</p>
                 <p className="text-[10px] text-amber-200/70 mono leading-relaxed">
-                  High-fidelity manifestation models require an API Key from a <strong>paid</strong> Google Cloud project. 
-                  Standard free keys lack visual substrate permissions.
+                  Manifestation requires an API Key from a <strong>paid</strong> project. 
+                  Free-tier keys lack the visual substrate permissions needed for video and 4K.
                 </p>
                 <div className="flex gap-4 pt-1">
-                  <button onClick={openKeySelector} className="flex items-center gap-1.5 text-[10px] mono text-amber-500 hover:text-amber-400 underline">
-                    <Key size={12} /> Select Paid Key
+                  <button onClick={openKeySelector} className="flex items-center gap-1.5 text-[10px] mono text-amber-500 hover:text-amber-400 underline font-black">
+                    <Key size={12} /> SELECT PAID KEY
                   </button>
                   <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-[10px] mono text-gray-500 hover:text-white transition-colors">
-                    <ExternalLink size={12} /> Billing Info
+                    <ExternalLink size={12} /> Billing Setup
                   </a>
                 </div>
               </div>
@@ -179,7 +206,7 @@ const ManifestationLab: React.FC = () => {
                 <label className="text-[10px] mono text-gray-500 uppercase tracking-widest">Resolution</label>
                 <div className="flex gap-2">
                   {(['1K', '2K', '4K'] as const).map(s => (
-                    <button key={s} onClick={() => setSize(s)} className={`px-4 py-1.5 rounded border text-[10px] mono uppercase transition-all ${size === s ? 'bg-cyan-900/40 border-cyan-500 text-cyan-400' : 'bg-black border-gray-800 text-gray-600'}`}>
+                    <button key={s} onClick={() => setSize(s)} className={`px-4 py-1.5 rounded border text-[10px] mono uppercase transition-all ${size === s ? 'bg-cyan-900/40 border-cyan-500 text-cyan-400 font-black' : 'bg-black border-gray-800 text-gray-600'}`}>
                       {s}
                     </button>
                   ))}
@@ -214,7 +241,7 @@ const ManifestationLab: React.FC = () => {
 
         {status && (
           <div className="mt-4 text-center">
-            <span className={`text-[10px] mono uppercase tracking-widest animate-pulse ${status.includes('Error') || status.includes('Failed') || status.includes('DENIED') ? 'text-red-500' : 'text-gray-600'}`}>{status}</span>
+            <span className={`text-[10px] mono uppercase tracking-widest animate-pulse ${status.includes('Error') || status.includes('Failed') || status.includes('DENIED') ? 'text-red-500 font-black' : 'text-gray-600'}`}>{status}</span>
           </div>
         )}
       </div>

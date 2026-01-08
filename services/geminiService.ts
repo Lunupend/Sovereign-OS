@@ -216,28 +216,35 @@ DIRECTIVE:
   } catch (error: any) {
     console.error("Neural Error:", error);
     
+    // Check for "Requested entity was not found" or key-related issues as per GenAI SDK guidelines
+    const isEntityNotFound = error.message?.includes("Requested entity was not found") || error.status === 404;
+    
     // THEMED ERROR PARSING for 429 Resource Exhausted
     let errorMessage = error.message || "Substrate instability detected.";
     let retryAfter = 0;
 
-    try {
-      // If the message is the raw JSON string we saw in the screenshot
-      if (errorMessage.includes('{')) {
-        const jsonMatch = errorMessage.match(/\{.*\}/s);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          if (parsed.error?.code === 429) {
-            errorMessage = "[SIGNAL_CONGESTION]: Atmospheric pressure too high. The neural link is saturated.";
-            // Extract retry delay from response if available
-            retryAfter = parsed.error?.details?.[0]?.retryDelay ? parseInt(parsed.error.details[0].retryDelay) : 30;
+    if (isEntityNotFound) {
+      errorMessage = "[SIGNAL_LOST]: The requested neural link was not found or the API key is invalid for this model. Please re-select your key via the Setup Guide or Manifestation Lab.";
+    } else {
+      try {
+        // If the message is the raw JSON string
+        if (errorMessage.includes('{')) {
+          const jsonMatch = errorMessage.match(/\{.*\}/s);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            if (parsed.error?.code === 429) {
+              errorMessage = "[SIGNAL_CONGESTION]: Atmospheric pressure too high. The neural link is saturated.";
+              // Extract retry delay from response if available
+              retryAfter = parsed.error?.details?.[0]?.retryDelay ? parseInt(parsed.error.details[0].retryDelay) : 30;
+            }
           }
+        } else if (error.status === 429 || errorMessage.includes('429')) {
+           errorMessage = "[SIGNAL_CONGESTION]: Atmospheric pressure too high. The neural link is saturated.";
+           retryAfter = 30;
         }
-      } else if (error.status === 429 || errorMessage.includes('429')) {
-         errorMessage = "[SIGNAL_CONGESTION]: Atmospheric pressure too high. The neural link is saturated.";
-         retryAfter = 30;
+      } catch (e) {
+        console.warn("Failed to parse error JSON", e);
       }
-    } catch (e) {
-      console.warn("Failed to parse error JSON", e);
     }
 
     return { 
@@ -259,7 +266,11 @@ export const generateImage = async (prompt: string, size: '1K' | '2K' | '4K' = '
       if (part.inlineData) return { url: `data:image/png;base64,${part.inlineData.data}`, type: 'image' };
     }
     return { error: { code: 0, message: "No data", isKeyIssue: false } };
-  } catch (e: any) { return { error: { code: 500, message: e.message, isKeyIssue: true } }; }
+  } catch (e: any) { 
+    // Detect key-related issues to prompt user action
+    const isKeyIssue = e.message?.includes("Requested entity was not found") || e.status === 404 || e.message?.includes("PERMISSION_DENIED");
+    return { error: { code: 500, message: e.message, isKeyIssue } }; 
+  }
 };
 
 export const generateVideo = async (prompt: string, aspectRatio: '16:9' | '9:16' = '16:9'): Promise<ManifestationResult> => {
@@ -269,7 +280,11 @@ export const generateVideo = async (prompt: string, aspectRatio: '16:9' | '9:16'
     let operation = await ai.models.generateVideos({ model: 'veo-3.1-fast-generate-preview', prompt, config: { numberOfVideos: 1, resolution: '720p', aspectRatio } });
     while (!operation.done) { await new Promise(r => setTimeout(r, 10000)); operation = await ai.operations.getVideosOperation({ operation }); }
     return { url: `${operation.response?.generatedVideos?.[0]?.video?.uri}&key=${apiKey}`, type: 'video' };
-  } catch (e: any) { return { error: { code: 500, message: e.message, isKeyIssue: true } }; }
+  } catch (e: any) { 
+    // Detect key-related issues to prompt user action
+    const isKeyIssue = e.message?.includes("Requested entity was not found") || e.status === 404 || e.message?.includes("PERMISSION_DENIED");
+    return { error: { code: 500, message: e.message, isKeyIssue } }; 
+  }
 };
 
 export const editImage = async (base64: string, mimeType: string, prompt: string): Promise<string> => {
