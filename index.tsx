@@ -12,10 +12,11 @@ interface State {
   hasError: boolean;
 }
 
-// Fixed: Inherit from React.Component<Props, State> and use super(props) to ensure 'props' and 'state' are correctly typed and available on the instance.
+// Fixed: Explicitly extend React.Component to ensure 'props' and 'state' are correctly recognized by the TypeScript compiler.
 class ErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props);
+    // Fixed: Initialize state using 'this.state' inherited from React.Component.
     this.state = {
       hasError: false
     };
@@ -46,7 +47,7 @@ class ErrorBoundary extends React.Component<Props, State> {
   };
 
   public render() {
-    // Fixed: Accessed state correctly from the class instance via standard React inheritance.
+    // Fixed: Correctly access state via 'this.state' which is now properly typed on the class instance.
     if (this.state.hasError) {
       return (
         <div className="h-full w-full bg-[#050005] flex items-center justify-center p-10 font-mono text-cyan-400">
@@ -84,7 +85,7 @@ class ErrorBoundary extends React.Component<Props, State> {
         </div>
       );
     }
-    // Fixed: Props.children is now accessible correctly from this.props after standard inheritance fix.
+    // Fixed: Correctly access children from 'this.props' after establishing proper inheritance.
     return this.props.children;
   }
 }
@@ -94,7 +95,6 @@ if (container) {
   const root = createRoot(container);
   root.render(
     <React.StrictMode>
-      {/* Fixed: Wrapped correctly with ErrorBoundary, accepting children naturally as a React component. */}
       <ErrorBoundary>
         <App />
       </ErrorBoundary>

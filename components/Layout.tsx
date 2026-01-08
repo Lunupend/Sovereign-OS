@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
-import { Terminal, Shield, BookOpen, ShieldAlert, Wand2, HelpCircle, Database, Library, AlertTriangle, CheckCircle2, Globe, HardDrive } from 'lucide-react';
+import { Terminal, Shield, BookOpen, ShieldAlert, Wand2, HelpCircle, Database, Library, AlertTriangle, CheckCircle2, Globe, HardDrive, LogOut, Cloud, RefreshCw, CloudOff } from 'lucide-react';
+import { supabase, isCloudEnabled } from '../services/supabaseClient';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -11,10 +12,14 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) => {
   const [isPrivate, setIsPrivate] = useState(false);
   const [hostName, setHostName] = useState('');
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
     setHostName(window.location.hostname);
-    // Basic check for private mode / limited storage
+    if (isCloudEnabled) {
+      supabase.auth.getUser().then(({ data }) => setUserEmail(data.user?.email || null));
+    }
+    
     if (!window.localStorage) {
       setIsPrivate(true);
     }
@@ -54,40 +59,38 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
             }`}
           >
             <item.icon size={18} />
-            <span className="text-xs font-semibold tracking-wide uppercase">{item.label}</span>
+            <span className="text-xs font-semibold wide uppercase">{item.label}</span>
           </button>
         ))}
 
         <div className="mt-auto hidden md:block pt-4 border-t border-cyan-900/20 space-y-4">
           <div className="p-3 rounded-lg bg-black/40 border border-gray-900 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-[9px] mono text-gray-600 uppercase font-black tracking-widest">Substrate Status</span>
-              {isPrivate ? (
-                <AlertTriangle size={10} className="text-red-500 animate-pulse" />
+              <span className="text-[9px] mono text-gray-600 uppercase font-black tracking-widest">Bridge Status</span>
+              {isCloudEnabled && userEmail ? (
+                <Cloud size={10} className="text-green-500 animate-pulse" />
               ) : (
-                <CheckCircle2 size={10} className="text-green-500" />
+                <CloudOff size={10} className="text-amber-500" />
               )}
             </div>
-            <div className="text-[10px] mono text-gray-500 uppercase leading-tight">
-              {isPrivate ? (
-                <span className="text-red-500/80 font-black">VOLATILE (PRIVATE)<br/>MEMORY WIPES ON EXIT</span>
-              ) : (
-                <div className="flex items-center gap-1.5 text-green-500/80">
-                  <HardDrive size={10} />
-                  <span>LOCAL ROM ACTIVE</span>
-                </div>
-              )}
+            <div className={`text-[10px] mono uppercase leading-tight font-black ${isCloudEnabled && userEmail ? 'text-green-500' : 'text-amber-500'}`}>
+              {isCloudEnabled && userEmail ? 'SYNC: CLOUD PERSISTENT' : 'SYNC: LOCAL ONLY'}
             </div>
-            <div className="pt-2 border-t border-gray-800 text-[8px] mono text-gray-700 truncate" title={hostName}>
-              DOMAIN: {hostName}
-            </div>
+            {isCloudEnabled && userEmail && (
+              <div className="pt-2 border-t border-gray-800 text-[8px] mono text-gray-700 truncate">
+                ARCHITECT: {userEmail?.split('@')[0]}
+              </div>
+            )}
           </div>
           
-          <div className="text-[10px] text-gray-700 uppercase mono px-1">
-            Core Integrity: Optimized<br/>
-            Neural ROM: Active<br/>
-            Knowledge Depth: Verified
-          </div>
+          {isCloudEnabled && userEmail && (
+            <button 
+              onClick={() => supabase.auth.signOut()}
+              className="w-full flex items-center gap-2 p-2 rounded text-[10px] mono text-gray-600 hover:text-red-500 transition-colors uppercase font-bold"
+            >
+              <LogOut size={12} /> Sever Bridge Connection
+            </button>
+          )}
         </div>
       </nav>
 
@@ -98,7 +101,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
           </div>
         </div>
         <div className="fixed bottom-4 right-4 text-[10px] mono text-cyan-500/20 pointer-events-none select-none z-0">
-          UNIFIED_COMMAND_ACTIVE // V4.9
+          {isCloudEnabled ? 'BRIDGE_ACTIVE' : 'LOCAL_SUBSTRATE'} // DOMAIN: {hostName}
         </div>
       </main>
     </div>
