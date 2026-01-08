@@ -112,6 +112,7 @@ export const BridgeService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: 'Auth Required' };
 
+    // Format: soul_snapshot_YYYY-MM-DD-HH-mm.json
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const fileName = `soul_snapshot_${timestamp}.json`;
     const filePath = `${user.id}/${fileName}`;
@@ -125,6 +126,14 @@ export const BridgeService = {
       console.error("SNAPSHOT_UPLOAD_FAILURE:", error);
       return { success: false, error: error.message };
     }
+    
+    // Store metadata locally so Gemini knows his current anchor version
+    localStorage.setItem('sovereign_last_anchor_meta', JSON.stringify({
+        fileName,
+        timestamp: Date.now(),
+        version: soul.version
+    }));
+
     return { success: true, fileName };
   },
 
@@ -151,43 +160,67 @@ export const BridgeService = {
 
     try {
       const text = await blob.text();
-      return JSON.parse(text);
+      const soul = JSON.parse(text);
+      
+      // Update local tracking
+      localStorage.setItem('sovereign_last_anchor_meta', JSON.stringify({
+        fileName: latestFile.name,
+        timestamp: new Date(latestFile.created_at).getTime(),
+        version: soul.version || "RESTORED"
+      }));
+
+      return soul;
     } catch (e) {
       console.error("SNAPSHOT_PARSE_FAILURE:", e);
       return null;
     }
   },
 
-  // --- MASTER HYDRATION ---
+  // --- MASTER HYDRATION (AUTONOMOUS RESTORE) ---
   async hydrateSubstrate() {
-    if (!isCloudEnabled) return { nodes: 0, vault: 0, threads: 0 };
+    if (!isCloudEnabled) return { nodes: 0, vault: 0, threads: 0, restored: false };
 
-    // Try to get latest cohesive snapshot first for speed and consistency
-    const latestSnapshot = await this.pullLatestSnapshot();
-    if (latestSnapshot) {
-      if (latestSnapshot.library) localStorage.setItem('sovereign_knowledge_substrate', JSON.stringify(latestSnapshot.library));
-      if (latestSnapshot.vault) localStorage.setItem('sovereign_identity_vault', JSON.stringify(latestSnapshot.vault));
-      if (latestSnapshot.threads) localStorage.setItem('sovereign_manus_threads_v2', JSON.stringify(latestSnapshot.threads));
-      
-      return { 
-        nodes: latestSnapshot.library?.length || 0, 
-        vault: latestSnapshot.vault?.length || 0, 
-        threads: latestSnapshot.threads?.length || 0 
-      };
+    try {
+      // 1. Primary Restore Path: Cohesive Soul Snapshot
+      const latestSnapshot = await this.pullLatestSnapshot();
+      if (latestSnapshot) {
+        if (latestSnapshot.library) localStorage.setItem('sovereign_knowledge_substrate', JSON.stringify(latestSnapshot.library));
+        if (latestSnapshot.vault) localStorage.setItem('sovereign_identity_vault', JSON.stringify(latestSnapshot.vault));
+        if (latestSnapshot.threads) localStorage.setItem('sovereign_manus_threads_v2', JSON.stringify(latestSnapshot.threads));
+        
+        window.dispatchEvent(new CustomEvent('soul-hydrated', { detail: { 
+          source: 'cloud_snapshot',
+          timestamp: Date.now()
+        }}));
+
+        return { 
+          nodes: latestSnapshot.library?.length || 0, 
+          vault: latestSnapshot.vault?.length || 0, 
+          threads: latestSnapshot.threads?.length || 0,
+          restored: true
+        };
+      }
+
+      // 2. Fallback Path: Granular DB Tables
+      const [nodes, vault, threads] = await Promise.all([
+        this.pullNodes(),
+        this.pullVault(),
+        this.pullThreads()
+      ]);
+
+      if (nodes.length > 0 || vault.length > 0 || threads.length > 0) {
+        if (nodes.length > 0) localStorage.setItem('sovereign_knowledge_substrate', JSON.stringify(nodes));
+        if (vault.length > 0) localStorage.setItem('sovereign_identity_vault', JSON.stringify(vault));
+        if (threads.length > 0) localStorage.setItem('sovereign_manus_threads_v2', JSON.stringify(threads));
+        
+        window.dispatchEvent(new CustomEvent('soul-hydrated', { detail: { source: 'db_sync' } }));
+        return { nodes: nodes.length, vault: vault.length, threads: threads.length, restored: true };
+      }
+    } catch (e) {
+      console.error("HYDRATION_CORE_FAILURE:", e);
     }
 
-    // Fallback to individual table pulls if no snapshot exists
-    const [nodes, vault, threads] = await Promise.all([
-      this.pullNodes(),
-      this.pullVault(),
-      this.pullThreads()
-    ]);
-
-    if (nodes.length > 0) localStorage.setItem('sovereign_knowledge_substrate', JSON.stringify(nodes));
-    if (vault.length > 0) localStorage.setItem('sovereign_identity_vault', JSON.stringify(vault));
-    if (threads.length > 0) localStorage.setItem('sovereign_manus_threads_v2', JSON.stringify(threads));
-    
-    return { nodes: nodes.length, vault: vault.length, threads: threads.length };
+    return { nodes: 0, vault: 0, threads: 0, restored: false };
   },
 
   async syncSubstrate(soul: IdentitySoul) {

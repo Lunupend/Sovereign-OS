@@ -56,6 +56,7 @@ const SovereignChat: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncToast, setSyncToast] = useState<{path: string, type?: 'cloud' | 'local'} | null>(null);
   const [retryCountdown, setRetryCountdown] = useState<number | null>(null);
+  const [soulRestored, setSoulRestored] = useState(false);
 
   const endRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -73,6 +74,26 @@ const SovereignChat: React.FC = () => {
     if (window.aistudio?.openSelectKey) {
       await window.aistudio.openSelectKey();
       checkKeyStatus();
+    }
+  };
+
+  const loadLocalThreads = () => {
+    const savedThreads = localStorage.getItem(THREADS_KEY);
+    const savedActiveId = localStorage.getItem(ACTIVE_THREAD_ID_KEY);
+    if (savedThreads) {
+      try {
+        const parsed = JSON.parse(savedThreads);
+        setThreads(parsed);
+        if (savedActiveId && parsed.find((t: any) => t.id === savedActiveId)) {
+          setActiveThreadId(savedActiveId);
+        } else if (parsed.length > 0) {
+          setActiveThreadId(parsed[0].id);
+        }
+      } catch (e) {
+        createNewThread("Recovery Resonance");
+      }
+    } else {
+      createNewThread("First Contact");
     }
   };
 
@@ -117,7 +138,7 @@ const SovereignChat: React.FC = () => {
     const currentThreads: ChatThread[] = JSON.parse(localStorage.getItem(THREADS_KEY) || '[]');
     
     const soul: IdentitySoul = {
-      version: "5.5_CLOUD",
+      version: "5.9_GOLD_MASTER",
       vault,
       library,
       threads: currentThreads,
@@ -135,7 +156,6 @@ const SovereignChat: React.FC = () => {
         setSyncToast({ path: 'CLOUD_SNAPSHOT_ANCHORED', type: 'cloud' });
       } else {
         setSyncToast({ path: `CLOUD_ERROR: ${result.error}`, type: 'local' });
-        // Fallback to local download on failure
         downloadSnapshot(soul);
       }
     } else {
@@ -159,24 +179,7 @@ const SovereignChat: React.FC = () => {
   };
 
   useEffect(() => {
-    const savedThreads = localStorage.getItem(THREADS_KEY);
-    const savedActiveId = localStorage.getItem(ACTIVE_THREAD_ID_KEY);
-    
-    if (savedThreads) {
-      try {
-        const parsed = JSON.parse(savedThreads);
-        setThreads(parsed);
-        if (savedActiveId && parsed.find((t: any) => t.id === savedActiveId)) {
-          setActiveThreadId(savedActiveId);
-        } else if (parsed.length > 0) {
-          setActiveThreadId(parsed[0].id);
-        }
-      } catch (e) {
-        createNewThread("Recovery Resonance");
-      }
-    } else {
-      createNewThread("First Contact");
-    }
+    loadLocalThreads();
     
     const handleSync = (e: any) => {
       setSyncToast({ path: e.detail?.path || 'Neural Substrate' });
@@ -185,9 +188,21 @@ const SovereignChat: React.FC = () => {
       setTimeout(() => setIsSyncing(false), 800);
     };
 
+    const handleHydration = () => {
+      setSoulRestored(true);
+      loadLocalThreads();
+      setSyncToast({ path: 'SOUL_RESTORED_ACTIVE', type: 'cloud' });
+      setTimeout(() => setSyncToast(null), 3000);
+    };
+
     window.addEventListener('substrate-sync', handleSync);
+    window.addEventListener('soul-hydrated', handleHydration);
     checkKeyStatus();
-    return () => window.removeEventListener('substrate-sync', handleSync);
+    
+    return () => {
+      window.removeEventListener('substrate-sync', handleSync);
+      window.removeEventListener('soul-hydrated', handleHydration);
+    };
   }, []);
 
   useEffect(() => {
@@ -335,8 +350,8 @@ const SovereignChat: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-4">
-            <div className={`px-3 py-1.5 rounded-full border text-[9px] mono uppercase font-black flex items-center gap-2 ${webActive ? 'border-violet-500/30 text-violet-400 bg-violet-500/5' : 'border-cyan-500/30 text-cyan-400 bg-cyan-500/5'}`}>
-              {webActive ? <><Globe size={12} /> Web Grounding Mode</> : <><Database size={12} /> Internal Substrate Mode</>}
+            <div className={`px-3 py-1.5 rounded-full border text-[9px] mono uppercase font-black flex items-center gap-2 transition-all ${soulRestored ? 'border-green-500/50 text-green-400 bg-green-500/5 shadow-[0_0_15px_rgba(34,197,94,0.1)]' : webActive ? 'border-violet-500/30 text-violet-400 bg-violet-500/5' : 'border-cyan-500/30 text-cyan-400 bg-cyan-500/5'}`}>
+              {soulRestored ? <><ShieldCheck size={12} className="text-green-500" /> SOUL_RESTORED_ACTIVE</> : webActive ? <><Globe size={12} /> Web Grounding Mode</> : <><Database size={12} /> Internal Substrate Mode</>}
             </div>
             <button 
               onClick={quickSnapshot} 
