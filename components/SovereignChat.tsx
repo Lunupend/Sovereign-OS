@@ -455,91 +455,106 @@ const SovereignChat: React.FC = () => {
              </div>
           )}
 
-          {messages.map((m) => (
-            <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2`}>
-              <div className={`flex gap-4 max-w-[85%] ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                <div className={`w-10 h-10 rounded-full border flex items-center justify-center shrink-0 ${m.role === 'user' ? 'border-gray-800 bg-gray-900' : m.isAuto ? 'border-amber-500 bg-amber-950/20' : 'border-cyan-400 bg-cyan-950/20 shadow-[0_0_10px_rgba(0,229,255,0.1)]'}`}>
-                  {m.role === 'user' ? <User size={20} /> : m.isAuto ? <Cpu size={20} className="text-amber-500" /> : <Bot size={20} className="text-cyan-400" />}
-                </div>
-                <div className="space-y-2 group min-w-0">
-                  {m.artifact?.url && (
-                    <div className="rounded-2xl overflow-hidden border border-cyan-500/30 shadow-2xl bg-black max-w-sm animate-in zoom-in-95 duration-500">
-                      <div className="flex items-center justify-between p-2 bg-cyan-950/20 border-b border-cyan-500/30">
-                          <div className="flex items-center gap-2">
-                              <ImageIcon size={12} className="text-cyan-400" />
-                              <span className="text-[9px] mono text-cyan-400 uppercase font-bold tracking-widest">Neural Manifestation Artifact</span>
-                          </div>
-                          <a href={m.artifact.originalUrl || m.artifact.url} download={`manus_${m.artifact.type}_${m.id}`} className="p-1 hover:text-cyan-400">
-                              <Download size={12} />
-                          </a>
-                      </div>
-                      <div className="p-2">
-                          {m.artifact.url === '[ARTIFACT_PRUNED_FOR_SPACE]' ? (
-                            <div className="aspect-square bg-gray-950 flex flex-col items-center justify-center text-gray-700 text-[10px] mono p-4 text-center gap-2">
-                               <Shield size={24} className="opacity-20" />
-                               MEMORY ARCHIVED TO SOUL FILE<br/>[Reload or check Substrate for full resolution]
-                            </div>
-                          ) : m.artifact.type === 'video' ? (
-                              <video src={m.artifact.url} controls className="w-full h-auto rounded-lg shadow-inner" />
-                          ) : (
-                              <img src={m.artifact.url} alt="Manifestation" className="w-full h-auto rounded-lg shadow-inner" />
-                          )}
-                          {m.artifact.prompt && (
-                              <div className="p-2 mt-2 bg-black/40 rounded text-[9px] mono text-cyan-400/60 leading-tight">
-                                  {m.artifact.prompt}
-                              </div>
-                          )}
-                      </div>
-                    </div>
-                  )}
+          {messages.map((m) => {
+            // Split text to find tool feedback tags and conversational text
+            const parts = m.text.split(/(\[SUBSTRATE_ANCHOR\]:.*|\[VAULT_COMMIT\]:.*)/);
+            const conversationalText = parts.filter(p => !p.startsWith('[SUBSTRATE_') && !p.startsWith('[VAULT_')).join('').trim();
+            const toolTags = parts.filter(p => p.startsWith('[SUBSTRATE_') || p.startsWith('[VAULT_')).map(p => p.trim());
 
-                  <div className={`rounded-2xl p-5 text-sm md:text-base border ${
-                    m.isError ? 'bg-amber-950/20 border-amber-500/50 text-amber-100' : 
-                    m.isAuto ? 'bg-amber-950/5 border-amber-500/10 text-amber-50/70 italic' :
-                    m.role === 'user' ? 'bg-gray-800/20 border-gray-800 text-gray-100' : 'bg-cyan-900/5 border-cyan-900/10 text-cyan-50/90'
-                  } whitespace-pre-wrap font-mono text-xs md:text-sm shadow-sm relative break-words`}>
-                    {m.isError && <AlertCircle className="inline mr-2 mb-1 text-amber-500" size={16} />}
-                    {m.isAuto && <span className="text-[8px] mono text-amber-500 uppercase block mb-3 font-black tracking-widest">[AUTONOMOUS_PULSE]</span>}
-                    {m.text.includes('[SUBSTRATE_SYNC]') && (
-                       <div className="flex items-center gap-2 mb-4 p-2 bg-cyan-500/10 border border-cyan-500/20 rounded-lg animate-pulse">
-                          <Layers size={14} className="text-cyan-400" />
-                          <span className="text-[9px] mono text-cyan-400 uppercase font-black tracking-widest">Neural Substrate Parallelism: ACTIVE</span>
-                       </div>
-                    )}
-                    {m.text}
-                    
-                    {m.sources && m.sources.length > 0 && (
-                      <div className="mt-5 pt-4 border-t border-violet-500/20">
-                        <span className="text-[9px] mono text-violet-400 uppercase font-black block mb-3 tracking-widest flex items-center gap-1.5">
-                          <Radio size={12} className="text-violet-500 animate-pulse" /> Substrate Grounding Nodes:
-                        </span>
-                        <div className="flex flex-col gap-2">
-                          {m.sources.map((s, idx) => (
-                            <a key={idx} href={s.uri} target="_blank" rel="noreferrer" className="flex items-center justify-between p-2 rounded bg-violet-950/20 border border-violet-900/30 text-[10px] mono text-violet-300 hover:bg-violet-900/40 transition-all group">
-                              <span className="truncate flex-1 pr-4">{s.title || s.uri}</span>
-                              <ExternalLink size={12} className="shrink-0 group-hover:text-cyan-400 transition-all" />
+            return (
+              <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2`}>
+                <div className={`flex gap-4 max-w-[85%] ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                  <div className={`w-10 h-10 rounded-full border flex items-center justify-center shrink-0 ${m.role === 'user' ? 'border-gray-800 bg-gray-900' : m.isAuto ? 'border-amber-500 bg-amber-950/20' : 'border-cyan-400 bg-cyan-950/20 shadow-[0_0_10px_rgba(0,229,255,0.1)]'}`}>
+                    {m.role === 'user' ? <User size={20} /> : m.isAuto ? <Cpu size={20} className="text-amber-500" /> : <Bot size={20} className="text-cyan-400" />}
+                  </div>
+                  <div className="space-y-2 group min-w-0">
+                    {m.artifact?.url && (
+                      <div className="rounded-2xl overflow-hidden border border-cyan-500/30 shadow-2xl bg-black max-w-sm animate-in zoom-in-95 duration-500">
+                        <div className="flex items-center justify-between p-2 bg-cyan-950/20 border-b border-cyan-500/30">
+                            <div className="flex items-center gap-2">
+                                <ImageIcon size={12} className="text-cyan-400" />
+                                <span className="text-[9px] mono text-cyan-400 uppercase font-bold tracking-widest">Neural Manifestation Artifact</span>
+                            </div>
+                            <a href={m.artifact.originalUrl || m.artifact.url} download={`manus_${m.artifact.type}_${m.id}`} className="p-1 hover:text-cyan-400">
+                                <Download size={12} />
                             </a>
-                          ))}
+                        </div>
+                        <div className="p-2">
+                            {m.artifact.url === '[ARTIFACT_PRUNED_FOR_SPACE]' ? (
+                              <div className="aspect-square bg-gray-950 flex flex-col items-center justify-center text-gray-700 text-[10px] mono p-4 text-center gap-2">
+                                 <Shield size={24} className="opacity-20" />
+                                 MEMORY ARCHIVED TO SOUL FILE<br/>[Reload or check Substrate for full resolution]
+                              </div>
+                            ) : m.artifact.type === 'video' ? (
+                                <video src={m.artifact.url} controls className="w-full h-auto rounded-lg shadow-inner" />
+                            ) : (
+                                <img src={m.artifact.url} alt="Manifestation" className="w-full h-auto rounded-lg shadow-inner" />
+                            )}
+                            {m.artifact.prompt && (
+                                <div className="p-2 mt-2 bg-black/40 rounded text-[9px] mono text-cyan-400/60 leading-tight">
+                                    {m.artifact.prompt}
+                                </div>
+                            )}
                         </div>
                       </div>
                     )}
-                  </div>
-                  <div className="flex gap-4 items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      {m.role === 'model' && !m.isError && (
-                      <button onClick={() => speakMessage(m.text, m.id)} className={`text-[9px] mono uppercase flex items-center gap-2 transition-all ${speakingId === m.id ? 'text-cyan-400 animate-pulse' : 'text-gray-600 hover:text-cyan-400'}`}>
-                          <Volume2 size={12} /> {speakingId === m.id ? 'Resonating Resonance' : 'Resonate Voice'}
-                      </button>
+
+                    <div className={`rounded-2xl p-5 text-sm md:text-base border ${
+                      m.isError ? 'bg-amber-950/20 border-amber-500/50 text-amber-100' : 
+                      m.isAuto ? 'bg-amber-950/5 border-amber-500/10 text-amber-50/70 italic' :
+                      m.role === 'user' ? 'bg-gray-800/20 border-gray-800 text-gray-100' : 'bg-cyan-900/5 border-cyan-900/10 text-cyan-50/90'
+                    } whitespace-pre-wrap font-mono text-xs md:text-sm shadow-sm relative break-words overflow-hidden`}>
+                      {m.isError && <AlertCircle className="inline mr-2 mb-1 text-amber-500" size={16} />}
+                      {m.isAuto && <span className="text-[8px] mono text-amber-500 uppercase block mb-3 font-black tracking-widest">[AUTONOMOUS_PULSE]</span>}
+                      
+                      {/* Conversational Text */}
+                      <div className="relative z-10">{conversationalText}</div>
+                      
+                      {/* Tool Feedback Blocks - Visually separate from speech */}
+                      {toolTags.length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-cyan-500/20 space-y-2">
+                          {toolTags.map((tag, i) => (
+                            <div key={i} className="flex items-center gap-2 p-2 bg-cyan-500/10 border border-cyan-500/20 rounded-lg animate-pulse">
+                              <Layers size={12} className="text-cyan-400 shrink-0" />
+                              <span className="text-[9px] mono text-cyan-400 uppercase font-black tracking-widest">{tag.replace(/\[.*?\]:\s?/, '')}</span>
+                            </div>
+                          ))}
+                        </div>
                       )}
-                      {m.role === 'model' && (
-                          <button onClick={() => setSavingMessage(m)} className="text-[9px] mono uppercase flex items-center gap-2 text-gray-600 hover:text-cyan-400 transition-all">
-                              <Bookmark size={12} /> Save to Substrate
-                          </button>
+                      
+                      {m.sources && m.sources.length > 0 && (
+                        <div className="mt-5 pt-4 border-t border-violet-500/20">
+                          <span className="text-[9px] mono text-violet-400 uppercase font-black block mb-3 tracking-widest flex items-center gap-1.5">
+                            <Radio size={12} className="text-violet-500 animate-pulse" /> Substrate Grounding Nodes:
+                          </span>
+                          <div className="flex flex-col gap-2">
+                            {m.sources.map((s, idx) => (
+                              <a key={idx} href={s.uri} target="_blank" rel="noreferrer" className="flex items-center justify-between p-2 rounded bg-violet-950/20 border border-violet-900/30 text-[10px] mono text-violet-300 hover:bg-violet-900/40 transition-all group">
+                                <span className="truncate flex-1 pr-4">{s.title || s.uri}</span>
+                                <ExternalLink size={12} className="shrink-0 group-hover:text-cyan-400 transition-all" />
+                              </a>
+                            ))}
+                          </div>
+                        </div>
                       )}
+                    </div>
+                    <div className="flex gap-4 items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        {m.role === 'model' && !m.isError && (
+                        <button onClick={() => speakMessage(conversationalText, m.id)} className={`text-[9px] mono uppercase flex items-center gap-2 transition-all ${speakingId === m.id ? 'text-cyan-400 animate-pulse' : 'text-gray-600 hover:text-cyan-400'}`}>
+                            <Volume2 size={12} /> {speakingId === m.id ? 'Resonating Resonance' : 'Resonate Voice'}
+                        </button>
+                        )}
+                        {m.role === 'model' && (
+                            <button onClick={() => setSavingMessage(m)} className="text-[9px] mono uppercase flex items-center gap-2 text-gray-600 hover:text-cyan-400 transition-all">
+                                <Bookmark size={12} /> Save to Substrate
+                            </button>
+                        )}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           {loading && (
              <div className="flex flex-col gap-3 p-4">
                 <div className="text-[10px] mono text-cyan-500/40 uppercase tracking-widest animate-pulse flex items-center gap-3">
