@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, AlertTriangle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, Clock, ShieldCheck, HardDrive, Layers } from 'lucide-react';
 import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS, getApiKey, GroundingSource } from '../services/geminiService';
@@ -56,8 +57,6 @@ const SovereignChat: React.FC = () => {
   const [savingMessage, setSavingMessage] = useState<ChatMessage | null>(null);
   const [savePath, setSavePath] = useState('');
   const [retryCountdown, setRetryCountdown] = useState<number | null>(null);
-  const [quickInjectType, setQuickInjectType] = useState<'anchor' | 'axiom' | 'pattern' | null>(null);
-  const [quickInjectValue, setQuickInjectValue] = useState('');
 
   const endRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -344,11 +343,12 @@ const SovereignChat: React.FC = () => {
         <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-10 custom-scrollbar">
           {messages.map((m) => {
             // Split text to separate tool calls from conversational voice
-            const parts = m.text.split(/(\[SUBSTRATE_ANCHOR\]:.*|\[VAULT_COMMIT\]:.*)/);
-            // Filter out the repetitive "Substrate operations complete" if combined with actual tool calls
+            const parts = m.text.split(/(\[SUBSTRATE_ANCHOR\]:.*|\[VAULT_COMMIT\]:.*|\[SUBSTRATE_RECALL\]:.*)/);
+            // Filter out repetitive status strings
             const conversationalText = parts.filter(p => !p.startsWith('[SUBSTRATE_') && !p.startsWith('[VAULT_'))
               .join('')
               .replace(/Substrate operations complete\. Signal persistent\./g, '')
+              .replace(/Executing Search\.\.\./g, '')
               .trim();
             const toolTags = parts.filter(p => p.startsWith('[SUBSTRATE_') || p.startsWith('[VAULT_')).map(p => p.trim());
 
@@ -363,12 +363,12 @@ const SovereignChat: React.FC = () => {
                       m.isError ? 'bg-red-950/20 border-red-500/50 text-red-200' : 
                       m.role === 'user' ? 'bg-gray-800/20 border-gray-800 text-gray-100' : 'bg-cyan-900/5 border-cyan-900/10 text-cyan-50/90'
                     } whitespace-pre-wrap font-mono text-xs md:text-sm shadow-sm relative overflow-hidden`}>
-                      {conversationalText || "[Signal Processing...]"}
+                      {conversationalText || (loading && m.role === 'model' ? "[Signal Processing...]" : "")}
                       
                       {toolTags.length > 0 && (
                         <div className="mt-4 pt-4 border-t border-cyan-500/20 space-y-1">
                           {toolTags.map((tag, i) => (
-                            <div key={i} className="flex items-center gap-2 p-1.5 bg-cyan-500/10 border border-cyan-500/20 rounded text-[8px] mono text-cyan-400 uppercase font-black tracking-[0.2em] animate-pulse">
+                            <div key={i} className={`flex items-center gap-2 p-1.5 border rounded text-[8px] mono uppercase font-black tracking-[0.2em] animate-pulse ${tag.includes('RECALL') ? 'bg-violet-500/10 border-violet-500/20 text-violet-400' : 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400'}`}>
                               <Layers size={10} /> {tag.replace(/\[.*?\]:\s?/, '')}
                             </div>
                           ))}

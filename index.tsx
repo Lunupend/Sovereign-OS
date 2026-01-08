@@ -1,5 +1,5 @@
 
-import React, { ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import { Download, AlertTriangle } from 'lucide-react';
@@ -16,9 +16,9 @@ interface State {
  * Standard Error Boundary to catch substrate crashes and provide 
  * emergency data recovery options.
  */
-// Fix: Use React.Component explicitly to ensure that 'props' and 'state' are 
-// correctly recognized as inherited members by the TypeScript compiler.
-class ErrorBoundary extends React.Component<Props, State> {
+// Fix: Explicitly import and extend Component from React to ensure that 'props' and 'state' 
+// are correctly recognized as inherited members by the TypeScript compiler.
+class ErrorBoundary extends Component<Props, State> {
   public state: State = { hasError: false };
 
   constructor(props: Props) {
