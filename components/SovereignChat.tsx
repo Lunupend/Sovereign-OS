@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, AlertTriangle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, Clock, ShieldCheck, HardDrive, Layers, List } from 'lucide-react';
 import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS, getApiKey, GroundingSource } from '../services/geminiService';
@@ -53,8 +54,6 @@ const SovereignChat: React.FC = () => {
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncToast, setSyncToast] = useState<{path: string} | null>(null);
-  const [savingMessage, setSavingMessage] = useState<ChatMessage | null>(null);
-  const [savePath, setSavePath] = useState('');
   const [retryCountdown, setRetryCountdown] = useState<number | null>(null);
 
   const endRef = useRef<HTMLDivElement>(null);
@@ -314,6 +313,9 @@ const SovereignChat: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-4">
+            <div className={`px-3 py-1.5 rounded-full border text-[9px] mono uppercase font-black flex items-center gap-2 ${webActive ? 'border-violet-500/30 text-violet-400 bg-violet-500/5' : 'border-cyan-500/30 text-cyan-400 bg-cyan-500/5'}`}>
+              {webActive ? <><Globe size={12} /> Web Grounding Mode</> : <><Database size={12} /> Internal Substrate Mode</>}
+            </div>
             <button onClick={quickSnapshot} className="flex items-center gap-2 p-2 bg-cyan-600 text-black rounded hover:bg-cyan-400 transition-all font-black text-[10px] mono uppercase">
               <Download size={18} /> Snapshot Soul
             </button>
@@ -325,13 +327,13 @@ const SovereignChat: React.FC = () => {
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-10 custom-scrollbar">
           {messages.map((m) => {
-            const parts = m.text.split(/(\[SUBSTRATE_ANCHOR\]:.*|\[VAULT_COMMIT\]:.*|\[SUBSTRATE_RECALL\]:.*|\[SUBSTRATE_LIST\]:.*)/);
-            const conversationalText = parts.filter(p => !p.startsWith('[SUBSTRATE_') && !p.startsWith('[VAULT_'))
+            const parts = m.text.split(/(\[SUBSTRATE_ANCHOR\]:.*|\[VAULT_COMMIT\]:.*|\[SUBSTRATE_RECALL\]:.*|\[SUBSTRATE_LIST\]:.*|API_CONFLICT:.*)/);
+            const conversationalText = parts.filter(p => !p.startsWith('[SUBSTRATE_') && !p.startsWith('[VAULT_') && !p.startsWith('API_CONFLICT'))
               .join('')
               .replace(/Searching Substrate\.\.\./g, '')
               .replace(/Listing Library\.\.\./g, '')
               .trim();
-            const toolTags = parts.filter(p => p.startsWith('[SUBSTRATE_') || p.startsWith('[VAULT_')).map(p => p.trim());
+            const toolTags = parts.filter(p => p.startsWith('[SUBSTRATE_') || p.startsWith('[VAULT_') || p.startsWith('API_CONFLICT')).map(p => p.trim());
 
             return (
               <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2`}>
@@ -341,7 +343,7 @@ const SovereignChat: React.FC = () => {
                   </div>
                   <div className="space-y-2 group min-w-0">
                     <div className={`rounded-2xl p-5 text-sm md:text-base border ${
-                      m.isError ? 'bg-red-950/20 border-red-500/50 text-red-200' : 
+                      m.isError || m.text.includes('API_CONFLICT') ? 'bg-red-950/20 border-red-500/50 text-red-200' : 
                       m.role === 'user' ? 'bg-gray-800/20 border-gray-800 text-gray-100' : 'bg-cyan-900/5 border-cyan-900/10 text-cyan-50/90'
                     } whitespace-pre-wrap font-mono text-xs shadow-sm relative overflow-hidden`}>
                       {conversationalText || (loading && m.role === 'model' ? "[Processing Signal...]" : "")}
@@ -350,10 +352,11 @@ const SovereignChat: React.FC = () => {
                         <div className="mt-4 pt-4 border-t border-cyan-500/20 space-y-1">
                           {toolTags.map((tag, i) => (
                             <div key={i} className={`flex items-center gap-2 p-1.5 border rounded text-[8px] mono uppercase font-black tracking-[0.2em] animate-pulse ${
+                              tag.includes('API_CONFLICT') ? 'bg-red-500/10 border-red-500/20 text-red-400' :
                               tag.includes('RECALL') || tag.includes('LIST') ? 'bg-violet-500/10 border-violet-500/20 text-violet-400' : 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400'
                             }`}>
-                              {tag.includes('LIST') ? <List size={10} /> : <Layers size={10} />} 
-                              {tag.replace(/\[.*?\]:\s?/, '')}
+                              {tag.includes('API_CONFLICT') ? <AlertTriangle size={10} /> : tag.includes('LIST') ? <List size={10} /> : <Layers size={10} />} 
+                              {tag.replace(/\[.*?\]:\s?/, '').replace('API_CONFLICT: ', '')}
                             </div>
                           ))}
                         </div>
@@ -395,10 +398,22 @@ const SovereignChat: React.FC = () => {
 
         <div className="p-4 md:p-6 bg-[#050505] border-t border-cyan-500/10">
           <div className="max-w-4xl mx-auto space-y-4">
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-2 flex-wrap items-center">
               {(['anchor', 'axiom', 'pattern'] as const).map(t => (
-                <button key={t} onClick={() => handleSend(`+ ${t}`)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-800 text-[9px] mono uppercase text-gray-600 hover:text-cyan-400 transition-all font-bold tracking-widest"><Anchor size={12} /> + {t}</button>
+                <button 
+                  key={t} 
+                  disabled={webActive}
+                  onClick={() => handleSend(`+ ${t}`)} 
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[9px] mono uppercase transition-all font-bold tracking-widest ${webActive ? 'opacity-20 border-gray-900 text-gray-700 cursor-not-allowed' : 'border-gray-800 text-gray-600 hover:text-cyan-400'}`}
+                >
+                  <Anchor size={12} /> + {t}
+                </button>
               ))}
+              {webActive && (
+                <span className="text-[8px] mono text-amber-500/50 uppercase ml-2 animate-pulse flex items-center gap-1">
+                   <AlertCircle size={10} /> Deactivate Grounding to resume manual anchoring
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-3">
               <button onClick={() => fileInputRef.current?.click()} className="p-4 bg-gray-900 border border-gray-800 rounded-full text-gray-500 hover:text-cyan-400 transition-all"><Paperclip size={24} /></button>
