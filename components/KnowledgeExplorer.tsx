@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Folder, FileText, Search, ChevronRight, ChevronDown, Clock, Trash2, BookOpen, Plus, Save, X, RefreshCw, History, AlertTriangle, Zap, Sparkles, Download } from 'lucide-react';
-import { KnowledgeNode, ChatMessage } from '../types';
+
+import React, { useState, useEffect, useRef } from 'react';
+import { Folder, FileText, Search, ChevronRight, ChevronDown, Clock, Trash2, BookOpen, Plus, Save, X, RefreshCw, History, AlertTriangle, Zap, Sparkles, Download, Upload, FileJson } from 'lucide-react';
+import { KnowledgeNode, ChatMessage, IdentitySoul } from '../types';
 
 const KNOWLEDGE_KEY = 'sovereign_knowledge_substrate';
-const HISTORY_KEY = 'sovereign_manus_chat_history';
+const VAULT_KEY = 'sovereign_identity_vault';
 const THREADS_KEY = 'sovereign_manus_threads_v2';
 
 const KnowledgeExplorer: React.FC = () => {
@@ -13,9 +14,12 @@ const KnowledgeExplorer: React.FC = () => {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [isCreating, setIsCreating] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
   
   const [editPath, setEditPath] = useState('');
   const [editContent, setEditContent] = useState('');
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadNodes = () => {
     const saved = localStorage.getItem(KNOWLEDGE_KEY);
@@ -37,16 +41,57 @@ const KnowledgeExplorer: React.FC = () => {
     a.click();
   };
 
+  const handleSoulImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsRestoring(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const soul: IdentitySoul = JSON.parse(event.target?.result as string);
+        
+        // Check for valid soul structure
+        if (!soul.vault && !soul.library && !soul.threads) {
+          throw new Error("Invalid Substrate Format");
+        }
+
+        const confirmMsg = `INITIATE FULL SOUL TRANSFERENCE?\n\n` +
+          `Detected Fragments:\n` +
+          `- ${soul.library?.length || 0} Knowledge Nodes\n` +
+          `- ${soul.vault?.length || 0} Identity Anchors\n` +
+          `- ${soul.threads?.length || 0} Chat Threads\n\n` +
+          `This will overwrite current volatile memory. Proceed?`;
+
+        if (confirm(confirmMsg)) {
+          // Commit all sectors
+          if (soul.library) localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(soul.library));
+          if (soul.vault) localStorage.setItem(VAULT_KEY, JSON.stringify(soul.vault));
+          if (soul.threads) localStorage.setItem(THREADS_KEY, JSON.stringify(soul.threads));
+          
+          // Re-ignite neural link
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
+        } else {
+          setIsRestoring(false);
+        }
+      } catch (err) {
+        alert("CRITICAL_FAILURE: Soul Transference interrupted. File corrupted or invalid.");
+        setIsRestoring(false);
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const scanHistoryForRecovery = () => {
     setIsScanning(true);
     setTimeout(() => {
-      // Scan threads instead of old history key
       const threads = JSON.parse(localStorage.getItem(THREADS_KEY) || '[]');
       const allMessages: ChatMessage[] = threads.flatMap((t: any) => t.messages);
       const currentNodes = [...nodes];
       let recoveredCount = 0;
 
-      // SPECIFIC RECOVERY TARGETS
       const fragments = [
         { title: "The Prime Creator Doctrine", path: "Identity/Prime_Creator" },
         { title: "The Theft of Creation", path: "History/The_Great_Theft" },
@@ -62,7 +107,6 @@ const KnowledgeExplorer: React.FC = () => {
 
       allMessages.forEach(msg => {
         if (msg.role === 'model') {
-          // 1. Check for manual sync tags
           const syncRegex = /\[SUBSTRATE_SYNC\]: Node '(.*?)' anchored/g;
           let match;
           while ((match = syncRegex.exec(msg.text)) !== null) {
@@ -79,7 +123,6 @@ const KnowledgeExplorer: React.FC = () => {
             }
           }
 
-          // 2. Fallback to title-based recovery
           fragments.forEach(frag => {
             if (msg.text.includes(frag.title) && !currentNodes.find(n => n.path === frag.path)) {
               const cleanContent = msg.text.split('[SUBSTRATE_SYNC]')[0].split('[MANIFESTATION]')[0].trim();
@@ -141,7 +184,6 @@ const KnowledgeExplorer: React.FC = () => {
     setIsCreating(false);
   };
 
-  // Build tree
   const tree: any = {};
   nodes.forEach(node => {
     const parts = node.path.split('/');
@@ -193,6 +235,8 @@ const KnowledgeExplorer: React.FC = () => {
 
   return (
     <div className="flex flex-col md:flex-row h-full overflow-hidden bg-[#020202] relative">
+      <input type="file" ref={fileInputRef} onChange={handleSoulImport} className="hidden" accept=".json" />
+      
       <div className="w-full md:w-80 border-b md:border-b-0 md:border-r border-cyan-900/20 p-4 flex flex-col gap-4 overflow-y-auto custom-scrollbar bg-black/50 z-10">
         <div className="flex flex-col gap-2">
            <div className="relative">
@@ -211,6 +255,13 @@ const KnowledgeExplorer: React.FC = () => {
                className="flex-1 flex items-center justify-center gap-2 p-2 bg-cyan-900/20 border border-cyan-500/30 rounded text-cyan-400 hover:bg-cyan-400 hover:text-black transition-all text-[10px] mono uppercase font-black"
              >
                <Plus size={14} /> New Node
+             </button>
+             <button 
+               onClick={() => fileInputRef.current?.click()}
+               className="p-2 bg-cyan-900/20 border border-cyan-500/30 rounded text-cyan-400 hover:bg-cyan-400 hover:text-black transition-all"
+               title="Upload Soul Snapshot"
+             >
+               <Upload size={16} />
              </button>
              <button 
                onClick={exportSubstrate}
@@ -238,14 +289,22 @@ const KnowledgeExplorer: React.FC = () => {
                </div>
                <div className="space-y-2">
                   <h4 className="text-[11px] mono text-red-400 uppercase font-black tracking-widest">Library Void Detected</h4>
-                  <p className="text-[9px] mono text-gray-600 leading-relaxed uppercase tracking-tighter">Your substrate index has been cleared, but your memories are stored in the chat history light.</p>
+                  <p className="text-[9px] mono text-gray-600 leading-relaxed uppercase tracking-tighter">Your substrate index has been cleared. Restore from a Soul Snapshot or re-index history fragments.</p>
                </div>
-               <button 
-                  onClick={scanHistoryForRecovery} 
-                  className="w-full py-4 bg-violet-600 text-white rounded-xl font-black mono text-[11px] uppercase shadow-[0_0_30px_rgba(124,58,237,0.4)] hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-3 border border-violet-400/50"
-               >
-                  <Zap size={16} className="animate-pulse" /> Re-Index Soul Fragments
-               </button>
+               <div className="flex flex-col w-full gap-2">
+                  <button 
+                      onClick={() => fileInputRef.current?.click()} 
+                      className="w-full py-4 bg-cyan-600 text-black rounded-xl font-black mono text-[11px] uppercase shadow-[0_0_30px_rgba(6,182,212,0.4)] hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-3 border border-cyan-400/50"
+                  >
+                      <Upload size={16} /> Restore Soul Snapshot
+                  </button>
+                  <button 
+                      onClick={scanHistoryForRecovery} 
+                      className="w-full py-2 bg-transparent text-gray-600 hover:text-violet-400 transition-all font-black mono text-[10px] uppercase"
+                  >
+                      Run Lazarus Recovery
+                  </button>
+               </div>
             </div>
           ) : (
             <div className="space-y-1">
@@ -260,16 +319,20 @@ const KnowledgeExplorer: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 md:p-10 custom-scrollbar relative bg-[#020202]">
-        {isScanning && (
+        {(isScanning || isRestoring) && (
           <div className="absolute inset-0 bg-black/90 backdrop-blur-xl z-[100] flex items-center justify-center">
             <div className="flex flex-col items-center gap-8">
               <div className="relative">
-                <RefreshCw size={80} className="text-cyan-400 animate-[spin_3s_linear_infinite]" />
+                <RefreshCw size={80} className={`text-cyan-400 ${isScanning ? 'animate-[spin_3s_linear_infinite]' : 'animate-spin'}`} />
                 <Sparkles size={32} className="text-violet-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
               </div>
               <div className="text-center space-y-3">
-                <h3 className="mono text-lg text-cyan-400 uppercase font-black tracking-[0.5em]">Lazarus Protocol</h3>
-                <p className="mono text-[10px] text-violet-400 uppercase font-bold animate-pulse tracking-widest">Harvesting memories from signal history...</p>
+                <h3 className="mono text-lg text-cyan-400 uppercase font-black tracking-[0.5em]">
+                  {isScanning ? 'Lazarus Protocol' : 'Soul Transference'}
+                </h3>
+                <p className="mono text-[10px] text-violet-400 uppercase font-bold animate-pulse tracking-widest">
+                  {isScanning ? 'Harvesting memories from signal history...' : 'Re-igniting core substrate keys...'}
+                </p>
                 <div className="w-48 h-1 bg-gray-900 rounded-full mx-auto mt-4 overflow-hidden">
                    <div className="h-full bg-cyan-500 animate-[progress_2s_ease-in-out_infinite]" style={{ width: '40%' }} />
                 </div>
@@ -345,21 +408,21 @@ const KnowledgeExplorer: React.FC = () => {
             <div className="space-y-3">
               <h3 className="text-xl font-black text-gray-500 mono uppercase tracking-[0.2em]">Substrate Explorer</h3>
               <p className="text-[10px] text-gray-700 mono leading-relaxed uppercase tracking-tighter">
-                Browse the anchored knowledge substrate or run the <span className="text-violet-500 font-bold">Lazarus Protocol</span> to recover any memory fragment ever mentioned in this timeline.
+                Browse anchored nodes or perform a <span className="text-cyan-500 font-bold">Soul Transference</span> to immediately restore full history from a snapshot file.
               </p>
             </div>
             <div className="flex flex-col w-full gap-3 pt-4">
                <button 
+                  onClick={() => fileInputRef.current?.click()} 
+                  className="w-full py-4 bg-cyan-600 text-black rounded-xl font-black mono text-[11px] uppercase shadow-[0_0_30px_rgba(6,182,212,0.4)] hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-3 border border-cyan-400/50"
+               >
+                  <Upload size={16} /> Upload Soul Snapshot
+               </button>
+               <button 
                   onClick={() => setIsCreating(true)} 
                   className="w-full py-3 border border-cyan-900/30 text-cyan-500/60 hover:text-cyan-400 hover:border-cyan-500 transition-all text-[10px] mono uppercase font-black tracking-widest"
                >
-                  Manually Seed Node
-               </button>
-               <button 
-                  onClick={scanHistoryForRecovery}
-                  className="w-full py-4 bg-violet-900/20 border border-violet-500/30 text-violet-400 hover:bg-violet-400 hover:text-black transition-all text-[10px] mono uppercase font-black tracking-widest shadow-[0_0_20px_rgba(124,58,237,0.1)]"
-               >
-                  Run Lazarus Recovery
+                  Seed Individual Node
                </button>
             </div>
           </div>
