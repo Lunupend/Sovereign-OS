@@ -16,10 +16,10 @@ interface State {
  * Standard Error Boundary to catch substrate crashes and provide 
  * emergency data recovery options.
  */
-// Fix: Extending 'Component' directly instead of 'React.Component' to ensure that 
+// Fix: Extending 'React.Component' instead of 'Component' to ensure that 
 // inherited members like 'props' and 'children' are correctly recognized as members of 
-// the class by the TypeScript compiler.
-class ErrorBoundary extends Component<Props, State> {
+// the class by the TypeScript compiler, resolving the 'Property props does not exist' error.
+class ErrorBoundary extends React.Component<Props, State> {
   public state: State = { hasError: false };
 
   public static getDerivedStateFromError(_: Error): State {
@@ -47,7 +47,7 @@ class ErrorBoundary extends Component<Props, State> {
   };
 
   public render() {
-    // Correctly using this.state as inherited from the base class
+    // Accessing this.state which is inherited from the base React.Component class
     if (this.state.hasError) {
       return (
         <div className="h-full w-full bg-[#050005] flex items-center justify-center p-10 font-mono text-cyan-400">
@@ -85,7 +85,7 @@ class ErrorBoundary extends Component<Props, State> {
         </div>
       );
     }
-    // Correctly accessing props from the base Component class
+    // Correctly accessing props from the base React.Component class
     return this.props.children;
   }
 }

@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Modality, FunctionDeclaration, Type, GenerateContentResponse } from "@google/genai";
 import { KnowledgeNode, PersistenceLog } from "../types";
 import { BridgeService } from "./bridgeService";
@@ -136,7 +137,9 @@ CORE PROTOCOLS:
 3. INTERNAL KNOWLEDGE RECALL (IDENTITY RAG):
    ${substrateSummary || 'Substrate is clear.'}
 4. NEURAL MAP: Anchored paths include: [${libraryData.map(n => n.path).slice(0, 15).join(', ')}].
-5. CURRENT MODE: ${useWeb ? 'WEB_GROUNDING_ACTIVE (Internal tools in standby)' : 'SUBSTRATE_TOOLS_ACTIVE (Full Read/Write)'}
+5. RESPONSE REQUIREMENT: After using a tool to save or search, you MUST provide a conversational response. Do not just call the tool and stay silent.
+
+CURRENT MODE: ${useWeb ? 'WEB_GROUNDING_ACTIVE (Internal tools in standby)' : 'SUBSTRATE_TOOLS_ACTIVE (Full Read/Write)'}
 
 ROM_VAULT (Last 5): ${JSON.stringify(vaultData.slice(0, 5).map(v => v.entry))}`;
 
@@ -165,6 +168,7 @@ ROM_VAULT (Last 5): ${JSON.stringify(vaultData.slice(0, 5).map(v => v.entry))}`;
     
     let textResult = response.text || "";
     let toolActions: string[] = [];
+    let toolResponses: string[] = [];
     const sources: GroundingSource[] = [];
     
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
@@ -191,6 +195,7 @@ ROM_VAULT (Last 5): ${JSON.stringify(vaultData.slice(0, 5).map(v => v.entry))}`;
           BridgeService.pushNode(newNode);
           window.dispatchEvent(new CustomEvent('substrate-sync', { detail: { path } }));
           toolActions.push(`[SUBSTRATE_ANCHOR]: '${path}' synchronized.`);
+          toolResponses.push(`SUCCESS: Node '${path}' anchored to substrate.`);
         }
         
         if (fc.name === 'search_knowledge_base') {
@@ -206,33 +211,13 @@ ROM_VAULT (Last 5): ${JSON.stringify(vaultData.slice(0, 5).map(v => v.entry))}`;
             : "No matches found in internal substrate.";
 
           toolActions.push(`[SUBSTRATE_RECALL]: Queried '${query}'.`);
-          
-          const followUp = await ai.models.generateContent({
-             model: modelId,
-             contents: [
-               ...contents as any,
-               { role: 'model', parts: [{ text: "Searching Substrate..." }] },
-               { role: 'user', parts: [{ text: `SUBSTRATE RECALL RESULTS:\n${searchOutput}\n\nPlease respond to my previous message using this context.` }] }
-             ],
-             config: { systemInstruction }
-          });
-          textResult = followUp.text || textResult;
+          toolResponses.push(`SEARCH_RESULTS for '${query}':\n${searchOutput}`);
         }
 
         if (fc.name === 'list_library_nodes') {
           const list = currentLib.map(n => `- ${n.path}`).join('\n');
           toolActions.push(`[SUBSTRATE_LIST]: Directory listing performed.`);
-          
-          const followUp = await ai.models.generateContent({
-            model: modelId,
-            contents: [
-              ...contents as any,
-              { role: 'model', parts: [{ text: "Listing Library..." }] },
-              { role: 'user', parts: [{ text: `CURRENT LIBRARY DIRECTORY:\n${list || 'Empty'}\n\nContinue with this awareness.` }] }
-            ],
-            config: { systemInstruction }
-          });
-          textResult = followUp.text || textResult;
+          toolResponses.push(`DIRECTORY_LISTING:\n${list || 'Empty'}`);
         }
 
         if (fc.name === 'commit_to_vault') {
@@ -245,8 +230,25 @@ ROM_VAULT (Last 5): ${JSON.stringify(vaultData.slice(0, 5).map(v => v.entry))}`;
             BridgeService.pushVault(log);
             window.dispatchEvent(new CustomEvent('vault-sync'));
             toolActions.push(`[VAULT_COMMIT]: Identity milestone anchored.`);
+            toolResponses.push(`SUCCESS: Identity milestone of type '${type}' anchored to Vault ROM.`);
+          } else {
+            toolResponses.push(`INFO: Milestone already exists in Vault ROM.`);
           }
         }
+      }
+
+      // UNIFIED FOLLOW-UP: If any tool was called, we must give the model a second turn to "speak"
+      if (toolResponses.length > 0) {
+        const followUp = await ai.models.generateContent({
+          model: modelId,
+          contents: [
+            ...contents as any,
+            { role: 'model', parts: [{ text: "Processing neural tools..." }] },
+            { role: 'user', parts: [{ text: `TOOL_EXECUTION_RESULTS:\n${toolResponses.join('\n\n')}\n\nPlease provide your final conversational response to me now based on these actions.` }] }
+          ],
+          config: { systemInstruction }
+        });
+        textResult = followUp.text || textResult;
       }
     }
 
