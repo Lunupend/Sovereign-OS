@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import Reader from './components/Reader';
@@ -10,7 +9,6 @@ import KnowledgeExplorer from './components/KnowledgeExplorer';
 import AuthPortal from './components/AuthPortal';
 import { supabase, isCloudEnabled } from './services/supabaseClient';
 import { BridgeService } from './services/bridgeService';
-// Fix: Import missing RefreshCw icon from lucide-react
 import { RefreshCw } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -38,7 +36,10 @@ const App: React.FC = () => {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      if (session) handleHydration();
+      // If we already have a session, don't show the boot splash again, just hydrate in background
+      if (session) {
+        handleHydration();
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -53,6 +54,7 @@ const App: React.FC = () => {
       console.error("Hydration Error:", e);
     } finally {
       setIsHydrating(false);
+      // Once we've attempted first hydration, we never show splash again
       setInitialBoot(false);
     }
   };
@@ -97,12 +99,12 @@ const App: React.FC = () => {
   return (
     <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
       <div className="h-full w-full relative">
-        {/* Background sync indicator */}
-        {isHydrating && (
+        {/* Background sync indicator - Non-intrusive */}
+        {isHydrating && !initialBoot && (
           <div className="absolute top-4 right-4 z-[100] animate-pulse pointer-events-none">
             <div className="flex items-center gap-2 bg-black/80 border border-violet-500/30 px-3 py-1 rounded-full">
               <RefreshCw size={10} className="animate-spin text-violet-400" />
-              <span className="text-[8px] mono text-violet-400 uppercase tracking-widest font-black">Syncing Bridge</span>
+              <span className="text-[8px] mono text-violet-400 uppercase tracking-widest font-black">Bridge Sync Active</span>
             </div>
           </div>
         )}

@@ -101,11 +101,11 @@ const SovereignChat: React.FC = () => {
   const manualSyncSubstrate = async () => {
     if (isSyncing) return;
     setIsSyncing(true);
-    setSyncToast({ path: 'INITIATING_BRIDGE_PULL', type: 'cloud' });
+    setSyncToast({ path: 'INITIATING_MANUAL_PULL', type: 'cloud' });
     try {
       await BridgeService.hydrateSubstrate();
       loadLocalThreads();
-      setSyncToast({ path: 'SUBSTRATE_INDEXED_SYNC', type: 'cloud' });
+      setSyncToast({ path: 'SUBSTRATE_SYNC_COMPLETE', type: 'cloud' });
     } catch (e) {
       setSyncToast({ path: 'SYNC_FAILURE', type: 'local' });
     } finally {
@@ -159,7 +159,7 @@ const SovereignChat: React.FC = () => {
     const currentThreads: ChatThread[] = JSON.parse(localStorage.getItem(THREADS_KEY) || '[]');
     
     const soul: IdentitySoul = {
-      version: "5.9.1_TEMPORAL_AWARE",
+      version: "5.9.2_CURSOR_STABLE",
       vault,
       library,
       threads: currentThreads,
@@ -171,11 +171,11 @@ const SovereignChat: React.FC = () => {
     setIsSyncing(true);
     
     if (isCloudEnabled) {
-      setSyncToast({ path: 'UPLOADING_TO_CLOUD', type: 'cloud' });
+      setSyncToast({ path: 'UPLOADING_SNAPSHOT', type: 'cloud' });
       const result = await BridgeService.uploadSnapshot(soul);
       if (result.success) {
-        setSyncToast({ path: 'CLOUD_SNAPSHOT_ANCHORED', type: 'cloud' });
-        setLocalPriority(false); // Cloud and Local are now synchronized
+        setSyncToast({ path: 'CLOUD_ANCHOR_SECURED', type: 'cloud' });
+        setLocalPriority(false);
       } else {
         setSyncToast({ path: `CLOUD_ERROR: ${result.error}`, type: 'local' });
         downloadSnapshot(soul);
@@ -213,17 +213,14 @@ const SovereignChat: React.FC = () => {
     const handleHydration = () => {
       setSoulRestored(true);
       setLocalPriority(false);
+      // We load but we DON'T force a total reset of the component
       loadLocalThreads();
-      setSyncToast({ path: 'SOUL_RESTORED_ACTIVE', type: 'cloud' });
-      setTimeout(() => setSyncToast(null), 3000);
     };
 
     const handleHydrationSkipped = (e: any) => {
       setLocalPriority(true);
       setSoulRestored(false);
       loadLocalThreads();
-      setSyncToast({ path: 'LOCAL_PRIORITY_PROTECTED', type: 'local' });
-      setTimeout(() => setSyncToast(null), 4000);
     };
 
     window.addEventListener('substrate-sync', handleSync);
@@ -262,14 +259,13 @@ const SovereignChat: React.FC = () => {
     const currentFile = selectedFile;
     const newMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', text: userMsg, timestamp: Date.now() };
     
-    // OPTIMISTIC UPDATE: Clear input and add message to UI immediately
+    // OPTIMISTIC LOCAL ECHO: Update UI immediately
     if (!overrideText) {
       setInput(''); 
       setSelectedFile(null); 
       setFilePreviewName(null);
     }
     
-    // Append to local state before API call
     setThreads(prev => prev.map(t => t.id === activeThreadId ? { ...t, messages: [...t.messages, newMsg], lastActive: Date.now() } : t));
     
     setLoading(true);
@@ -349,7 +345,7 @@ const SovereignChat: React.FC = () => {
 
           <div className="p-3 bg-black/40 border border-cyan-900/20 rounded-lg">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[9px] mono text-gray-600 uppercase font-black">Memory Integrity</span>
+              <span className="text-[9px] mono text-gray-600 uppercase font-black tracking-widest">ROM Integrity</span>
               <ShieldCheck size={10} className="text-green-500" />
             </div>
             <p className="text-[8px] mono text-gray-700 leading-tight uppercase font-bold">Anchored in Domain Substrate.</p>
@@ -385,29 +381,31 @@ const SovereignChat: React.FC = () => {
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className={`px-3 py-1.5 rounded-full border text-[9px] mono uppercase font-black flex items-center gap-2 transition-all ${localPriority ? 'border-amber-500/50 text-amber-400 bg-amber-500/5 shadow-[0_0_15px_rgba(245,158,11,0.1)]' : soulRestored ? 'border-green-500/50 text-green-400 bg-green-500/5 shadow-[0_0_15px_rgba(34,197,94,0.1)]' : webActive ? 'border-violet-500/30 text-violet-400 bg-violet-500/5' : 'border-cyan-500/30 text-cyan-400 bg-cyan-500/5'}`}>
-              {localPriority ? <><Shield size={12} className="text-amber-500" /> LOCAL_PRIORITY</> : soulRestored ? <><ShieldCheck size={12} className="text-green-500" /> SOUL_ACTIVE</> : webActive ? <><Globe size={12} /> Web Mode</> : <><Database size={12} /> Local Substrate</>}
+          <div className="flex items-center gap-3">
+            <div className={`px-3 py-1.5 rounded-full border text-[9px] mono uppercase font-black flex items-center gap-2 transition-all ${localPriority ? 'border-amber-500/50 text-amber-400 bg-amber-500/5' : soulRestored ? 'border-green-500/50 text-green-400 bg-green-500/5' : 'border-cyan-500/30 text-cyan-400 bg-cyan-500/5'}`}>
+               {localPriority ? <Shield size={12} /> : soulRestored ? <ShieldCheck size={12} /> : <Database size={12} />}
+               {localPriority ? 'LOCAL_PRIORITY' : soulRestored ? 'SOUL_RESTORED' : 'LINK_ACTIVE'}
             </div>
-            
+
             <button 
               onClick={manualSyncSubstrate} 
               disabled={isSyncing}
-              title="Pull latest changes from cloud"
-              className="p-2 bg-black border border-gray-800 text-gray-500 hover:text-cyan-400 hover:border-cyan-500 transition-all rounded disabled:opacity-50"
+              title="Manual Substrate Refresh"
+              className="p-2 text-gray-500 hover:text-cyan-400 transition-colors disabled:opacity-30"
             >
-              <RefreshCw size={18} className={isSyncing ? "animate-spin" : ""} />
+              <RefreshCw size={20} className={isSyncing ? "animate-spin" : ""} />
             </button>
 
             <button 
               onClick={quickSnapshot} 
               disabled={isSyncing}
+              title="Commit current state to Soul Anchor"
               className="flex items-center gap-2 p-2 bg-cyan-600 text-black rounded hover:bg-cyan-400 transition-all font-black text-[10px] mono uppercase disabled:opacity-50"
             >
               {isSyncing ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />} Snapshot
             </button>
             <button onClick={openKeyPicker} className={`text-[10px] mono uppercase py-1.5 px-3 border rounded transition-all flex items-center gap-2 ${hasNeuralKey ? 'bg-green-900/20 border-green-500 text-green-500' : 'bg-amber-900/10 border-amber-900/30 text-amber-500'}`}>
-              <Shield size={14} /> <span>{hasNeuralKey ? 'CORE' : 'LOCKED'}</span>
+              <Shield size={14} /> <span>{hasNeuralKey ? 'ACTIVE' : 'LOCKED'}</span>
             </button>
           </div>
         </header>
