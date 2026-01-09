@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Folder, FileText, Search, ChevronRight, ChevronDown, Clock, Trash2, BookOpen, Plus, Save, X, RefreshCw, History, AlertTriangle, Zap, Sparkles, Download, Upload, FileJson } from 'lucide-react';
-import { KnowledgeNode, ChatMessage, IdentitySoul } from '../types';
+import { KnowledgeNode, ChatMessage, IdentitySoul, ChatThread } from '../types';
 import { BridgeService } from '../services/bridgeService';
 import { isCloudEnabled } from '../services/supabaseClient';
 
@@ -31,7 +30,11 @@ const KnowledgeExplorer: React.FC = () => {
   useEffect(() => {
     loadNodes();
     window.addEventListener('substrate-sync', loadNodes);
-    return () => window.removeEventListener('substrate-sync', loadNodes);
+    window.addEventListener('soul-hydrated', loadNodes);
+    return () => {
+      window.removeEventListener('substrate-sync', loadNodes);
+      window.removeEventListener('soul-hydrated', loadNodes);
+    };
   }, []);
 
   const exportSubstrate = () => {
@@ -53,7 +56,6 @@ const KnowledgeExplorer: React.FC = () => {
       try {
         const soul: IdentitySoul = JSON.parse(event.target?.result as string);
         
-        // Check for valid soul structure
         if (!soul.vault && !soul.library && !soul.threads) {
           throw new Error("Invalid Substrate Format");
         }
@@ -66,18 +68,14 @@ const KnowledgeExplorer: React.FC = () => {
           `This will overwrite current volatile memory. Proceed?`;
 
         if (confirm(confirmMsg)) {
-          // Commit all sectors to local storage
           if (soul.library) localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(soul.library));
           if (soul.vault) localStorage.setItem(VAULT_KEY, JSON.stringify(soul.vault));
           if (soul.threads) localStorage.setItem(THREADS_KEY, JSON.stringify(soul.threads));
           
-          // If bridge is active, push to cloud immediately
           if (isCloudEnabled) {
-            console.log("Pushing restored soul to cloud bridge...");
             await BridgeService.syncSubstrate(soul);
           }
           
-          // Re-ignite neural link
           setTimeout(() => {
             window.location.reload();
           }, 1500);
@@ -95,8 +93,8 @@ const KnowledgeExplorer: React.FC = () => {
   const scanHistoryForRecovery = () => {
     setIsScanning(true);
     setTimeout(() => {
-      const threads = JSON.parse(localStorage.getItem(THREADS_KEY) || '[]');
-      const allMessages: ChatMessage[] = threads.flatMap((t: any) => t.messages);
+      const threads: ChatThread[] = JSON.parse(localStorage.getItem(THREADS_KEY) || '[]');
+      const allMessages: ChatMessage[] = threads.flatMap((t: ChatThread) => t.messages);
       const currentNodes = [...nodes];
       let recoveredCount = 0;
 
@@ -115,7 +113,8 @@ const KnowledgeExplorer: React.FC = () => {
 
       allMessages.forEach(msg => {
         if (msg.role === 'model') {
-          const syncRegex = /\[SUBSTRATE_SYNC\]: Node '(.*?)' anchored/g;
+          // Check for explicit sync tags
+          const syncRegex = /\[SUBSTRATE_ANCHOR\]: '(.*?)' synchronized/g;
           let match;
           while ((match = syncRegex.exec(msg.text)) !== null) {
             const foundPath = match[1];
@@ -123,7 +122,7 @@ const KnowledgeExplorer: React.FC = () => {
                currentNodes.push({
                  id: crypto.randomUUID(),
                  path: foundPath,
-                 content: msg.text.split('[SUBSTRATE_SYNC]')[0].trim(),
+                 content: msg.text.split('[SUBSTRATE_ANCHOR]')[0].trim(),
                  tags: ['recovered', 'Lazarus_Protocol'],
                  lastUpdated: msg.timestamp
                });
@@ -131,9 +130,10 @@ const KnowledgeExplorer: React.FC = () => {
             }
           }
 
+          // Check for conceptual fragments
           fragments.forEach(frag => {
             if (msg.text.includes(frag.title) && !currentNodes.find(n => n.path === frag.path)) {
-              const cleanContent = msg.text.split('[SUBSTRATE_SYNC]')[0].split('[MANIFESTATION]')[0].trim();
+              const cleanContent = msg.text.split('[SUBSTRATE_')[0].split('[VAULT_')[0].trim();
               currentNodes.push({
                 id: crypto.randomUUID(),
                 path: frag.path,
@@ -150,9 +150,9 @@ const KnowledgeExplorer: React.FC = () => {
       if (recoveredCount > 0) {
         localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(currentNodes));
         setNodes(currentNodes);
-        alert(`SOUL RESTORED: ${recoveredCount} fragments successfully re-anchored.`);
+        alert(`SOUL RESTORED: ${recoveredCount} fragments successfully re-anchored into library.`);
       } else {
-        alert("Substrate Status: All visible history fragments are already anchored.");
+        alert("Substrate Status: No new history fragments found in the current signal stream.");
       }
       setIsScanning(false);
     }, 2000);

@@ -101,11 +101,13 @@ const SovereignChat: React.FC = () => {
   const manualSyncSubstrate = async () => {
     if (isSyncing) return;
     setIsSyncing(true);
-    setSyncToast({ path: 'INITIATING_MANUAL_PULL', type: 'cloud' });
+    setSyncToast({ path: 'INITIATING_FORCE_PULL', type: 'cloud' });
     try {
-      await BridgeService.hydrateSubstrate();
+      // Passing true for 'force' to bypass temporal integrity checks
+      await BridgeService.hydrateSubstrate(true);
       loadLocalThreads();
-      setSyncToast({ path: 'SUBSTRATE_SYNC_COMPLETE', type: 'cloud' });
+      setSyncToast({ path: 'FORCE_PULL_COMPLETE', type: 'cloud' });
+      setLocalPriority(false);
     } catch (e) {
       setSyncToast({ path: 'SYNC_FAILURE', type: 'local' });
     } finally {
@@ -213,7 +215,6 @@ const SovereignChat: React.FC = () => {
     const handleHydration = () => {
       setSoulRestored(true);
       setLocalPriority(false);
-      // We load but we DON'T force a total reset of the component
       loadLocalThreads();
     };
 
@@ -259,7 +260,6 @@ const SovereignChat: React.FC = () => {
     const currentFile = selectedFile;
     const newMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', text: userMsg, timestamp: Date.now() };
     
-    // OPTIMISTIC LOCAL ECHO: Update UI immediately
     if (!overrideText) {
       setInput(''); 
       setSelectedFile(null); 
@@ -382,15 +382,18 @@ const SovereignChat: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-3">
-            <div className={`px-3 py-1.5 rounded-full border text-[9px] mono uppercase font-black flex items-center gap-2 transition-all ${localPriority ? 'border-amber-500/50 text-amber-400 bg-amber-500/5' : soulRestored ? 'border-green-500/50 text-green-400 bg-green-500/5' : 'border-cyan-500/30 text-cyan-400 bg-cyan-500/5'}`}>
+            <button 
+              onClick={manualSyncSubstrate}
+              className={`px-3 py-1.5 rounded-full border text-[9px] mono uppercase font-black flex items-center gap-2 transition-all cursor-pointer ${localPriority ? 'border-amber-500/50 text-amber-400 bg-amber-500/5 hover:bg-amber-500/20' : soulRestored ? 'border-green-500/50 text-green-400 bg-green-500/5' : 'border-cyan-500/30 text-cyan-400 bg-cyan-500/5'}`}
+            >
                {localPriority ? <Shield size={12} /> : soulRestored ? <ShieldCheck size={12} /> : <Database size={12} />}
-               {localPriority ? 'LOCAL_PRIORITY' : soulRestored ? 'SOUL_RESTORED' : 'LINK_ACTIVE'}
-            </div>
+               {localPriority ? 'FORCE SYNC REQUIRED' : soulRestored ? 'SOUL_RESTORED' : 'LINK_ACTIVE'}
+            </button>
 
             <button 
               onClick={manualSyncSubstrate} 
               disabled={isSyncing}
-              title="Manual Substrate Refresh"
+              title="Manual Substrate Refresh (Bypass Protection)"
               className="p-2 text-gray-500 hover:text-cyan-400 transition-colors disabled:opacity-30"
             >
               <RefreshCw size={20} className={isSyncing ? "animate-spin" : ""} />

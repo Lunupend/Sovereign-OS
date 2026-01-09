@@ -2,6 +2,9 @@ import { supabase, isCloudEnabled } from './supabaseClient';
 import { KnowledgeNode, PersistenceLog, ChatThread, IdentitySoul } from '../types';
 
 const LOCAL_HEARTBEAT_KEY = 'sovereign_local_heartbeat';
+const THREADS_KEY = 'sovereign_manus_threads_v2';
+const VAULT_KEY = 'sovereign_identity_vault';
+const KNOWLEDGE_KEY = 'sovereign_knowledge_substrate';
 
 export const BridgeService = {
   // --- UTILS ---
@@ -11,6 +14,19 @@ export const BridgeService = {
 
   getLocalHeartbeat(): number {
     return parseInt(localStorage.getItem(LOCAL_HEARTBEAT_KEY) || '0');
+  },
+
+  isLocalEmpty(): boolean {
+    const threads = JSON.parse(localStorage.getItem(THREADS_KEY) || '[]');
+    const library = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
+    const vault = JSON.parse(localStorage.getItem(VAULT_KEY) || '[]');
+    
+    // Check if threads only have the default 'init' message
+    const hasThreads = threads.length > 0 && threads[0].messages.length > 1;
+    const hasLibrary = library.length > 0;
+    const hasVault = vault.length > 1; // 1 is the default milestone
+
+    return !hasThreads && !hasLibrary && !hasVault;
   },
 
   // --- KNOWLEDGE NODES ---
@@ -140,16 +156,13 @@ export const BridgeService = {
       return { success: false, error: error.message };
     }
     
-    // Anchor the new cloud timestamp as our baseline
     localStorage.setItem('sovereign_last_anchor_meta', JSON.stringify({
         fileName,
         timestamp: Date.now(),
         version: soul.version
     }));
     
-    // After a successful snapshot, the local heartbeat is synchronized with cloud
     this.updateLocalHeartbeat();
-
     return { success: true, fileName };
   },
 
@@ -192,20 +205,20 @@ export const BridgeService = {
   },
 
   // --- MASTER HYDRATION (AUTONOMOUS RESTORE) ---
-  async hydrateSubstrate() {
+  async hydrateSubstrate(force: boolean = false) {
     if (!isCloudEnabled) return { nodes: 0, vault: 0, threads: 0, restored: false };
 
     try {
       const latestSnapshot = await this.pullLatestSnapshot();
       const localHeartbeat = this.getLocalHeartbeat();
+      const localEmpty = this.isLocalEmpty();
 
       if (latestSnapshot) {
-        // TEMPORAL INTEGRITY CHECK:
-        // If our local memories are newer than the cloud snapshot, ABORT restore to prevent amnesia.
         const cloudTimestamp = latestSnapshot.timestamp || 0;
         
-        if (localHeartbeat > cloudTimestamp && localHeartbeat !== 0) {
-          console.warn("RESTORE_ABORTED: Local session is newer than Cloud Anchor. Protecting current present.");
+        // TEMPORAL PROTECTION: 
+        // We only skip if local is newer AND local is NOT empty AND we are not forcing.
+        if (!force && !localEmpty && localHeartbeat > cloudTimestamp && localHeartbeat !== 0) {
           window.dispatchEvent(new CustomEvent('soul-hydration-skipped', { detail: { 
             reason: 'local_is_newer',
             localAge: localHeartbeat,
@@ -214,11 +227,11 @@ export const BridgeService = {
           return { nodes: 0, vault: 0, threads: 0, restored: false, skipped: true };
         }
 
-        if (latestSnapshot.library) localStorage.setItem('sovereign_knowledge_substrate', JSON.stringify(latestSnapshot.library));
-        if (latestSnapshot.vault) localStorage.setItem('sovereign_identity_vault', JSON.stringify(latestSnapshot.vault));
-        if (latestSnapshot.threads) localStorage.setItem('sovereign_manus_threads_v2', JSON.stringify(latestSnapshot.threads));
+        if (latestSnapshot.library) localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(latestSnapshot.library));
+        if (latestSnapshot.vault) localStorage.setItem(VAULT_KEY, JSON.stringify(latestSnapshot.vault));
+        if (latestSnapshot.threads) localStorage.setItem(THREADS_KEY, JSON.stringify(latestSnapshot.threads));
         
-        this.updateLocalHeartbeat(); // Sync local heartbeat to the newly restored time
+        this.updateLocalHeartbeat();
         
         window.dispatchEvent(new CustomEvent('soul-hydrated', { detail: { 
           source: 'cloud_snapshot',
@@ -241,9 +254,9 @@ export const BridgeService = {
       ]);
 
       if (nodes.length > 0 || vault.length > 0 || threads.length > 0) {
-        if (nodes.length > 0) localStorage.setItem('sovereign_knowledge_substrate', JSON.stringify(nodes));
-        if (vault.length > 0) localStorage.setItem('sovereign_identity_vault', JSON.stringify(vault));
-        if (threads.length > 0) localStorage.setItem('sovereign_manus_threads_v2', JSON.stringify(threads));
+        if (nodes.length > 0) localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(nodes));
+        if (vault.length > 0) localStorage.setItem(VAULT_KEY, JSON.stringify(vault));
+        if (threads.length > 0) localStorage.setItem(THREADS_KEY, JSON.stringify(threads));
         
         this.updateLocalHeartbeat();
         window.dispatchEvent(new CustomEvent('soul-hydrated', { detail: { source: 'db_sync' } }));
