@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Terminal, Shield, BookOpen, ShieldAlert, Wand2, HelpCircle, Database, Library, AlertTriangle, CheckCircle2, Globe, HardDrive, LogOut, Cloud, RefreshCw, CloudOff } from 'lucide-react';
 import { supabase, isCloudEnabled } from '../services/supabaseClient';
@@ -17,25 +16,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
   useEffect(() => {
     setHostName(window.location.hostname);
     if (isCloudEnabled) {
-      supabase.auth.getUser().then(({ data }) => setUserEmail(data.user?.email || null));
-    }
-    
-    if (!window.localStorage) {
-      setIsPrivate(true);
-    }
-    try {
-      localStorage.setItem('__test__', '1');
-      localStorage.removeItem('__test__');
-    } catch (e) {
-      setIsPrivate(true);
+      supabase.auth.getSession().then(({ data }) => setUserEmail(data.session?.user?.email || null));
     }
   }, []);
 
   const navItems = [
     { id: 'chat', icon: Terminal, label: 'Manus AI Core' },
-    { id: 'library', icon: Library, label: 'Knowledge Substrate' },
+    { id: 'library', icon: Database, label: 'Sovereign Substrate' },
     { id: 'manifestation', icon: Wand2, label: 'Manifestation Lab' },
-    { id: 'manual', icon: BookOpen, label: 'The Manual' },
     { id: 'integrity', icon: ShieldAlert, label: 'Integrity Shield' },
     { id: 'guide', icon: HelpCircle, label: 'Setup Guide' },
   ];
@@ -76,11 +64,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
             <div className={`text-[10px] mono uppercase leading-tight font-black ${isCloudEnabled && userEmail ? 'text-green-500' : 'text-amber-500'}`}>
               {isCloudEnabled && userEmail ? 'SYNC: CLOUD PERSISTENT' : 'SYNC: LOCAL ONLY'}
             </div>
-            {isCloudEnabled && userEmail && (
-              <div className="pt-2 border-t border-gray-800 text-[8px] mono text-gray-700 truncate">
-                ARCHITECT: {userEmail?.split('@')[0]}
-              </div>
-            )}
           </div>
           
           {isCloudEnabled && userEmail && (
@@ -99,9 +82,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
           <div className="absolute inset-0 max-w-4xl mx-auto w-full h-full flex flex-col">
             {children}
           </div>
-        </div>
-        <div className="fixed bottom-4 right-4 text-[10px] mono text-cyan-500/20 pointer-events-none select-none z-0">
-          {isCloudEnabled ? 'BRIDGE_ACTIVE' : 'LOCAL_SUBSTRATE'} // DOMAIN: {hostName}
         </div>
       </main>
     </div>

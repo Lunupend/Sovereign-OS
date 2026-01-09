@@ -16,9 +16,12 @@ interface State {
  * Standard Error Boundary to catch substrate crashes and provide 
  * emergency data recovery options.
  */
-// Fix: Extending React.Component directly to resolve inheritance property access issues where 'this.props' was not properly recognized.
+// Fix: Added explicit constructor to properly initialize component and ensure property access on 'this.props' is correctly handled by TypeScript.
 class ErrorBoundary extends React.Component<Props, State> {
-  public state: State = { hasError: false };
+  constructor(props: Props) {
+    super(props);
+    this.state = { hasError: false };
+  }
 
   public static getDerivedStateFromError(_: Error): State {
     return { hasError: true };

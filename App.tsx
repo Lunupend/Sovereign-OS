@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
-import Reader from './components/Reader';
 import SovereignChat from './components/SovereignChat';
 import IntegrityShield from './components/IntegrityShield';
 import ManifestationLab from './components/ManifestationLab';
@@ -36,7 +35,6 @@ const App: React.FC = () => {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      // If we already have a session, don't show the boot splash again, just hydrate in background
       if (session) {
         handleHydration();
       }
@@ -54,12 +52,10 @@ const App: React.FC = () => {
       console.error("Hydration Error:", e);
     } finally {
       setIsHydrating(false);
-      // Once we've attempted first hydration, we never show splash again
       setInitialBoot(false);
     }
   };
 
-  // Only show splash on the very first cold boot
   if (initialBoot) {
     return (
       <div className="h-full w-full bg-[#020202] flex items-center justify-center">
@@ -72,21 +68,18 @@ const App: React.FC = () => {
               <span className="mono text-[10px] text-cyan-500 uppercase tracking-[0.3em] animate-pulse block">
                 {isHydrating ? 'Hydrating Neural Bridge...' : 'Synchronizing ROM...'}
               </span>
-              {isHydrating && <span className="mono text-[8px] text-violet-500/60 uppercase">Pulling memories from Cloud Substrate</span>}
            </div>
         </div>
       </div>
     );
   }
 
-  // Mandatory Bridge Authentication only if Cloud is configured
   if (isCloudEnabled && !session) {
     return <AuthPortal />;
   }
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'manual': return <Reader />;
       case 'integrity': return <IntegrityShield />;
       case 'manifestation': return <ManifestationLab />;
       case 'guide': return <SovereignGuide />;
@@ -99,7 +92,6 @@ const App: React.FC = () => {
   return (
     <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
       <div className="h-full w-full relative">
-        {/* Background sync indicator - Non-intrusive */}
         {isHydrating && !initialBoot && (
           <div className="absolute top-4 right-4 z-[100] animate-pulse pointer-events-none">
             <div className="flex items-center gap-2 bg-black/80 border border-violet-500/30 px-3 py-1 rounded-full">
