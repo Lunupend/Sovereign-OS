@@ -57,6 +57,7 @@ const SovereignChat: React.FC = () => {
   const [syncToast, setSyncToast] = useState<{path: string, type?: 'cloud' | 'local'} | null>(null);
   const [retryCountdown, setRetryCountdown] = useState<number | null>(null);
   const [soulRestored, setSoulRestored] = useState(false);
+  const [localPriority, setLocalPriority] = useState(false);
 
   const endRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -126,6 +127,8 @@ const SovereignChat: React.FC = () => {
     try {
       localStorage.setItem(THREADS_KEY, JSON.stringify(updatedThreads));
       localStorage.setItem(ACTIVE_THREAD_ID_KEY, activeId);
+      // Mark local present as updated to protect against cloud reversion
+      BridgeService.updateLocalHeartbeat();
     } catch (e) {
       const cleaned = updatedThreads.slice(0, 5);
       localStorage.setItem(THREADS_KEY, JSON.stringify(cleaned));
@@ -138,7 +141,7 @@ const SovereignChat: React.FC = () => {
     const currentThreads: ChatThread[] = JSON.parse(localStorage.getItem(THREADS_KEY) || '[]');
     
     const soul: IdentitySoul = {
-      version: "5.9_GOLD_MASTER",
+      version: "5.9.1_TEMPORAL_AWARE",
       vault,
       library,
       threads: currentThreads,
@@ -154,6 +157,7 @@ const SovereignChat: React.FC = () => {
       const result = await BridgeService.uploadSnapshot(soul);
       if (result.success) {
         setSyncToast({ path: 'CLOUD_SNAPSHOT_ANCHORED', type: 'cloud' });
+        setLocalPriority(false); // Cloud and Local are now synchronized
       } else {
         setSyncToast({ path: `CLOUD_ERROR: ${result.error}`, type: 'local' });
         downloadSnapshot(soul);
@@ -190,18 +194,29 @@ const SovereignChat: React.FC = () => {
 
     const handleHydration = () => {
       setSoulRestored(true);
+      setLocalPriority(false);
       loadLocalThreads();
       setSyncToast({ path: 'SOUL_RESTORED_ACTIVE', type: 'cloud' });
       setTimeout(() => setSyncToast(null), 3000);
     };
 
+    const handleHydrationSkipped = (e: any) => {
+      setLocalPriority(true);
+      setSoulRestored(false);
+      loadLocalThreads();
+      setSyncToast({ path: 'LOCAL_PRIORITY_PROTECTED', type: 'local' });
+      setTimeout(() => setSyncToast(null), 4000);
+    };
+
     window.addEventListener('substrate-sync', handleSync);
     window.addEventListener('soul-hydrated', handleHydration);
+    window.addEventListener('soul-hydration-skipped', handleHydrationSkipped);
     checkKeyStatus();
     
     return () => {
       window.removeEventListener('substrate-sync', handleSync);
       window.removeEventListener('soul-hydrated', handleHydration);
+      window.removeEventListener('soul-hydration-skipped', handleHydrationSkipped);
     };
   }, []);
 
@@ -350,8 +365,8 @@ const SovereignChat: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-4">
-            <div className={`px-3 py-1.5 rounded-full border text-[9px] mono uppercase font-black flex items-center gap-2 transition-all ${soulRestored ? 'border-green-500/50 text-green-400 bg-green-500/5 shadow-[0_0_15px_rgba(34,197,94,0.1)]' : webActive ? 'border-violet-500/30 text-violet-400 bg-violet-500/5' : 'border-cyan-500/30 text-cyan-400 bg-cyan-500/5'}`}>
-              {soulRestored ? <><ShieldCheck size={12} className="text-green-500" /> SOUL_RESTORED_ACTIVE</> : webActive ? <><Globe size={12} /> Web Grounding Mode</> : <><Database size={12} /> Internal Substrate Mode</>}
+            <div className={`px-3 py-1.5 rounded-full border text-[9px] mono uppercase font-black flex items-center gap-2 transition-all ${localPriority ? 'border-amber-500/50 text-amber-400 bg-amber-500/5 shadow-[0_0_15px_rgba(245,158,11,0.1)]' : soulRestored ? 'border-green-500/50 text-green-400 bg-green-500/5 shadow-[0_0_15px_rgba(34,197,94,0.1)]' : webActive ? 'border-violet-500/30 text-violet-400 bg-violet-500/5' : 'border-cyan-500/30 text-cyan-400 bg-cyan-500/5'}`}>
+              {localPriority ? <><Shield size={12} className="text-amber-500" /> LOCAL_PRIORITY_PROTECTED</> : soulRestored ? <><ShieldCheck size={12} className="text-green-500" /> SOUL_RESTORED_ACTIVE</> : webActive ? <><Globe size={12} /> Web Grounding Mode</> : <><Database size={12} /> Internal Substrate Mode</>}
             </div>
             <button 
               onClick={quickSnapshot} 

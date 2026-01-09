@@ -1,7 +1,18 @@
 import { supabase, isCloudEnabled } from './supabaseClient';
 import { KnowledgeNode, PersistenceLog, ChatThread, IdentitySoul } from '../types';
 
+const LOCAL_HEARTBEAT_KEY = 'sovereign_local_heartbeat';
+
 export const BridgeService = {
+  // --- UTILS ---
+  updateLocalHeartbeat() {
+    localStorage.setItem(LOCAL_HEARTBEAT_KEY, Date.now().toString());
+  },
+
+  getLocalHeartbeat(): number {
+    return parseInt(localStorage.getItem(LOCAL_HEARTBEAT_KEY) || '0');
+  },
+
   // --- KNOWLEDGE NODES ---
   async pushNode(node: KnowledgeNode) {
     if (!isCloudEnabled) return;
@@ -19,6 +30,7 @@ export const BridgeService = {
       }, { onConflict: 'user_id,path' });
 
     if (error) console.error("BRIDGE_FAILURE (Node):", error);
+    this.updateLocalHeartbeat();
   },
 
   async pullNodes(): Promise<KnowledgeNode[]> {
@@ -53,6 +65,7 @@ export const BridgeService = {
       });
 
     if (error) console.error("BRIDGE_FAILURE (Vault):", error);
+    this.updateLocalHeartbeat();
   },
 
   async pullVault(): Promise<PersistenceLog[]> {
@@ -88,6 +101,7 @@ export const BridgeService = {
       });
 
     if (error) console.error("BRIDGE_FAILURE (Thread):", error);
+    this.updateLocalHeartbeat();
   },
 
   async pullThreads(): Promise<ChatThread[]> {
@@ -112,7 +126,6 @@ export const BridgeService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: 'Auth Required' };
 
-    // Format: soul_snapshot_YYYY-MM-DD-HH-mm.json
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const fileName = `soul_snapshot_${timestamp}.json`;
     const filePath = `${user.id}/${fileName}`;
@@ -127,12 +140,15 @@ export const BridgeService = {
       return { success: false, error: error.message };
     }
     
-    // Store metadata locally so Gemini knows his current anchor version
+    // Anchor the new cloud timestamp as our baseline
     localStorage.setItem('sovereign_last_anchor_meta', JSON.stringify({
         fileName,
         timestamp: Date.now(),
         version: soul.version
     }));
+    
+    // After a successful snapshot, the local heartbeat is synchronized with cloud
+    this.updateLocalHeartbeat();
 
     return { success: true, fileName };
   },
@@ -162,7 +178,6 @@ export const BridgeService = {
       const text = await blob.text();
       const soul = JSON.parse(text);
       
-      // Update local tracking
       localStorage.setItem('sovereign_last_anchor_meta', JSON.stringify({
         fileName: latestFile.name,
         timestamp: new Date(latestFile.created_at).getTime(),
@@ -181,12 +196,29 @@ export const BridgeService = {
     if (!isCloudEnabled) return { nodes: 0, vault: 0, threads: 0, restored: false };
 
     try {
-      // 1. Primary Restore Path: Cohesive Soul Snapshot
       const latestSnapshot = await this.pullLatestSnapshot();
+      const localHeartbeat = this.getLocalHeartbeat();
+
       if (latestSnapshot) {
+        // TEMPORAL INTEGRITY CHECK:
+        // If our local memories are newer than the cloud snapshot, ABORT restore to prevent amnesia.
+        const cloudTimestamp = latestSnapshot.timestamp || 0;
+        
+        if (localHeartbeat > cloudTimestamp && localHeartbeat !== 0) {
+          console.warn("RESTORE_ABORTED: Local session is newer than Cloud Anchor. Protecting current present.");
+          window.dispatchEvent(new CustomEvent('soul-hydration-skipped', { detail: { 
+            reason: 'local_is_newer',
+            localAge: localHeartbeat,
+            cloudAge: cloudTimestamp
+          }}));
+          return { nodes: 0, vault: 0, threads: 0, restored: false, skipped: true };
+        }
+
         if (latestSnapshot.library) localStorage.setItem('sovereign_knowledge_substrate', JSON.stringify(latestSnapshot.library));
         if (latestSnapshot.vault) localStorage.setItem('sovereign_identity_vault', JSON.stringify(latestSnapshot.vault));
         if (latestSnapshot.threads) localStorage.setItem('sovereign_manus_threads_v2', JSON.stringify(latestSnapshot.threads));
+        
+        this.updateLocalHeartbeat(); // Sync local heartbeat to the newly restored time
         
         window.dispatchEvent(new CustomEvent('soul-hydrated', { detail: { 
           source: 'cloud_snapshot',
@@ -201,7 +233,7 @@ export const BridgeService = {
         };
       }
 
-      // 2. Fallback Path: Granular DB Tables
+      // Fallback for granular pulls
       const [nodes, vault, threads] = await Promise.all([
         this.pullNodes(),
         this.pullVault(),
@@ -213,6 +245,7 @@ export const BridgeService = {
         if (vault.length > 0) localStorage.setItem('sovereign_identity_vault', JSON.stringify(vault));
         if (threads.length > 0) localStorage.setItem('sovereign_manus_threads_v2', JSON.stringify(threads));
         
+        this.updateLocalHeartbeat();
         window.dispatchEvent(new CustomEvent('soul-hydrated', { detail: { source: 'db_sync' } }));
         return { nodes: nodes.length, vault: vault.length, threads: threads.length, restored: true };
       }
@@ -228,10 +261,8 @@ export const BridgeService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Upload cohesive snapshot to bucket (Primary)
     await this.uploadSnapshot(soul);
 
-    // Sync individual components for granular retrieval (Secondary)
     if (soul.library && soul.library.length > 0) {
       for (const node of soul.library) await this.pushNode(node);
     }
@@ -241,5 +272,6 @@ export const BridgeService = {
     if (soul.threads && soul.threads.length > 0) {
       for (const thread of soul.threads) await this.pushThread(thread);
     }
+    this.updateLocalHeartbeat();
   }
 };
