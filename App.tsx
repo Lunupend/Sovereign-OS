@@ -10,24 +10,29 @@ import KnowledgeExplorer from './components/KnowledgeExplorer';
 import AuthPortal from './components/AuthPortal';
 import { supabase, isCloudEnabled } from './services/supabaseClient';
 import { BridgeService } from './services/bridgeService';
+// Fix: Import missing RefreshCw icon from lucide-react
+import { RefreshCw } from 'lucide-react';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('chat');
   const [session, setSession] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [initialBoot, setInitialBoot] = useState(true);
   const [isHydrating, setIsHydrating] = useState(false);
 
   useEffect(() => {
     if (!isCloudEnabled) {
-      setLoading(false);
+      setInitialBoot(false);
       return;
     }
 
     // Initial session check
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      if (session) handleHydration();
-      else setLoading(false);
+      if (session) {
+        handleHydration();
+      } else {
+        setInitialBoot(false);
+      }
     });
 
     // Listen for auth changes
@@ -41,7 +46,6 @@ const App: React.FC = () => {
 
   const handleHydration = async () => {
     setIsHydrating(true);
-    setLoading(true);
     try {
       const counts = await BridgeService.hydrateSubstrate();
       console.log(`Substrate Hydrated: ${counts.nodes} nodes, ${counts.vault} anchors.`);
@@ -49,11 +53,12 @@ const App: React.FC = () => {
       console.error("Hydration Error:", e);
     } finally {
       setIsHydrating(false);
-      setLoading(false);
+      setInitialBoot(false);
     }
   };
 
-  if (loading) {
+  // Only show splash on the very first cold boot
+  if (initialBoot) {
     return (
       <div className="h-full w-full bg-[#020202] flex items-center justify-center">
         <div className="flex flex-col items-center gap-6">
@@ -91,7 +96,16 @@ const App: React.FC = () => {
 
   return (
     <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
-      <div className="h-full w-full">
+      <div className="h-full w-full relative">
+        {/* Background sync indicator */}
+        {isHydrating && (
+          <div className="absolute top-4 right-4 z-[100] animate-pulse pointer-events-none">
+            <div className="flex items-center gap-2 bg-black/80 border border-violet-500/30 px-3 py-1 rounded-full">
+              <RefreshCw size={10} className="animate-spin text-violet-400" />
+              <span className="text-[8px] mono text-violet-400 uppercase tracking-widest font-black">Syncing Bridge</span>
+            </div>
+          </div>
+        )}
         {renderContent()}
       </div>
     </Layout>

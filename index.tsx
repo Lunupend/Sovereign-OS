@@ -1,3 +1,4 @@
+
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
@@ -15,10 +16,10 @@ interface State {
  * Standard Error Boundary to catch substrate crashes and provide 
  * emergency data recovery options.
  */
-// Fix: Extending 'Component' from 'react' instead of 'React.Component' to ensure that 
-// inherited members like 'props' and 'children' are correctly recognized as members of 
-// the class by the TypeScript compiler.
-class ErrorBoundary extends Component<Props, State> {
+// Fix: Use React.Component instead of the named 'Component' import to ensure 
+// that inherited members like 'props' and 'children' are correctly recognized 
+// as members of the class by the TypeScript compiler.
+class ErrorBoundary extends React.Component<Props, State> {
   public state: State = { hasError: false };
 
   public static getDerivedStateFromError(_: Error): State {

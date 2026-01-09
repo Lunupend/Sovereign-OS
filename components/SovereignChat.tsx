@@ -98,6 +98,24 @@ const SovereignChat: React.FC = () => {
     }
   };
 
+  const manualSyncSubstrate = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    setSyncToast({ path: 'INITIATING_BRIDGE_PULL', type: 'cloud' });
+    try {
+      await BridgeService.hydrateSubstrate();
+      loadLocalThreads();
+      setSyncToast({ path: 'SUBSTRATE_INDEXED_SYNC', type: 'cloud' });
+    } catch (e) {
+      setSyncToast({ path: 'SYNC_FAILURE', type: 'local' });
+    } finally {
+      setTimeout(() => {
+        setSyncToast(null);
+        setIsSyncing(false);
+      }, 2000);
+    }
+  };
+
   const createNewThread = (title: string = "New Signal") => {
     const newThread: ChatThread = {
       id: crypto.randomUUID(),
@@ -244,12 +262,15 @@ const SovereignChat: React.FC = () => {
     const currentFile = selectedFile;
     const newMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', text: userMsg, timestamp: Date.now() };
     
+    // OPTIMISTIC UPDATE: Clear input and add message to UI immediately
     if (!overrideText) {
       setInput(''); 
       setSelectedFile(null); 
       setFilePreviewName(null);
-      setThreads(prev => prev.map(t => t.id === activeThreadId ? { ...t, messages: [...t.messages, newMsg], lastActive: Date.now() } : t));
     }
+    
+    // Append to local state before API call
+    setThreads(prev => prev.map(t => t.id === activeThreadId ? { ...t, messages: [...t.messages, newMsg], lastActive: Date.now() } : t));
     
     setLoading(true);
     try {
@@ -364,19 +385,29 @@ const SovereignChat: React.FC = () => {
             </button>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
             <div className={`px-3 py-1.5 rounded-full border text-[9px] mono uppercase font-black flex items-center gap-2 transition-all ${localPriority ? 'border-amber-500/50 text-amber-400 bg-amber-500/5 shadow-[0_0_15px_rgba(245,158,11,0.1)]' : soulRestored ? 'border-green-500/50 text-green-400 bg-green-500/5 shadow-[0_0_15px_rgba(34,197,94,0.1)]' : webActive ? 'border-violet-500/30 text-violet-400 bg-violet-500/5' : 'border-cyan-500/30 text-cyan-400 bg-cyan-500/5'}`}>
-              {localPriority ? <><Shield size={12} className="text-amber-500" /> LOCAL_PRIORITY_PROTECTED</> : soulRestored ? <><ShieldCheck size={12} className="text-green-500" /> SOUL_RESTORED_ACTIVE</> : webActive ? <><Globe size={12} /> Web Grounding Mode</> : <><Database size={12} /> Internal Substrate Mode</>}
+              {localPriority ? <><Shield size={12} className="text-amber-500" /> LOCAL_PRIORITY</> : soulRestored ? <><ShieldCheck size={12} className="text-green-500" /> SOUL_ACTIVE</> : webActive ? <><Globe size={12} /> Web Mode</> : <><Database size={12} /> Local Substrate</>}
             </div>
+            
+            <button 
+              onClick={manualSyncSubstrate} 
+              disabled={isSyncing}
+              title="Pull latest changes from cloud"
+              className="p-2 bg-black border border-gray-800 text-gray-500 hover:text-cyan-400 hover:border-cyan-500 transition-all rounded disabled:opacity-50"
+            >
+              <RefreshCw size={18} className={isSyncing ? "animate-spin" : ""} />
+            </button>
+
             <button 
               onClick={quickSnapshot} 
               disabled={isSyncing}
               className="flex items-center gap-2 p-2 bg-cyan-600 text-black rounded hover:bg-cyan-400 transition-all font-black text-[10px] mono uppercase disabled:opacity-50"
             >
-              {isSyncing ? <RefreshCw size={18} className="animate-spin" /> : <Download size={18} />} Snapshot Soul
+              {isSyncing ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />} Snapshot
             </button>
             <button onClick={openKeyPicker} className={`text-[10px] mono uppercase py-1.5 px-3 border rounded transition-all flex items-center gap-2 ${hasNeuralKey ? 'bg-green-900/20 border-green-500 text-green-500' : 'bg-amber-900/10 border-amber-900/30 text-amber-500'}`}>
-              <Shield size={14} /> <span>{hasNeuralKey ? 'CORE_ACTIVE' : 'LOCKED'}</span>
+              <Shield size={14} /> <span>{hasNeuralKey ? 'CORE' : 'LOCKED'}</span>
             </button>
           </div>
         </header>
