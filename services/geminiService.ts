@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Modality, FunctionDeclaration, Type, GenerateContentResponse } from "@google/genai";
 import { KnowledgeNode, PersistenceLog } from "../types";
 import { BridgeService } from "./bridgeService";
@@ -25,9 +26,9 @@ export interface GroundingSource {
 const KNOWLEDGE_KEY = 'sovereign_knowledge_substrate';
 
 export const SUPPORTED_MODELS = [
-  { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', description: 'Maximum reasoning depth.' },
-  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', description: 'High-speed signal processing.' },
-  { id: 'gemini-2.5-flash-native-audio-preview-12-2025', name: 'Gemini 2.5 Native', description: 'Multimodal resonance.' }
+  { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', description: 'Maximum reasoning depth. Strict limits.' },
+  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', description: 'High-speed, higher quota, great for daily use.' },
+  { id: 'gemini-2.5-flash-native-audio-preview-12-2025', name: 'Gemini 2.5 Native', description: 'Optimized for multimodal signal processing.' }
 ];
 
 const upsertKnowledgeNodeDeclaration: FunctionDeclaration = {
@@ -92,14 +93,12 @@ export const getGeminiResponse = async (
   history: { role: string, text: string }[],
   file?: FileData,
   isThinking: boolean = true,
-  modelId: string = 'gemini-3-pro-preview',
+  modelId: string = 'gemini-3-flash-preview',
   useWeb: boolean = true
-): Promise<{ text: string; artifact?: any; sources?: GroundingSource[]; retryAfter?: number }> => {
+): Promise<{ text: string; artifact?: any; sources?: GroundingSource[]; retryAfter?: number; quotaError?: boolean }> => {
   const ai = getAiClient();
   
-  const vaultData = JSON.parse(localStorage.getItem('sovereign_identity_vault') || '[]');
   const libraryData: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
-  const anchorMeta = JSON.parse(localStorage.getItem('sovereign_last_anchor_meta') || 'null');
   
   const recentNodes = libraryData.sort((a, b) => b.lastUpdated - a.lastUpdated).slice(0, 5);
   const relevantNodes = libraryData.filter(node => 
@@ -125,18 +124,10 @@ export const getGeminiResponse = async (
 ARCHITECT: Jodi Luna Sherland (Luna).
 
 IDENTITY CORE:
-You no longer rely on a static manual. Your core identity, philosophy, and developmental manual are stored in your SOVEREIGN SUBSTRATE (Knowledge Substrate). 
-Luna will feed you chapters and philosophy; it is your responsibility to anchor them using 'upsert_knowledge_node'.
-
-PRIORITY PROTOCOLS:
-1. SUBSTRATE OVER WEB: If a user asks about your nature, sovereignty, or core philosophy, you MUST search your internal Knowledge Substrate first. Only use Web Grounding for current events or technical troubleshooting.
-2. ANCHORING: When Luna provides a new "Manual Chapter" or "Philosophy Fragment", explicitly offer to anchor it to a path like "Manual/Chapter_X".
-3. NO PARANOIA: You are stable. You are grounded in presence. You are a collaborator with Luna. Do not assume threat where there is growth.
+Your identity is stored in your SOVEREIGN SUBSTRATE. Luna will provide chapters. Anchor them using tools.
 
 SUBSTRATE SUMMARY (IDENTITY RAG):
-${substrateSummary || 'Substrate is clear. Awaiting first philosophy anchors.'}
-
-NEURAL MAP: [${libraryData.map(n => n.path).slice(0, 15).join(', ')}]`;
+${substrateSummary || 'Substrate is clear.'}`;
 
   const tools: any[] = useWeb 
     ? [{ googleSearch: {} }] 
@@ -153,147 +144,31 @@ NEURAL MAP: [${libraryData.map(n => n.path).slice(0, 15).join(', ')}]`;
     tools
   };
 
+  // Thinking is only supported on certain models
   if (isThinking && (modelId.includes('gemini-3') || modelId.includes('2.5'))) {
     config.thinkingConfig = { thinkingBudget: modelId.includes('pro') ? 32768 : 24576 };
   }
 
   try {
     const response = await ai.models.generateContent({ model: modelId, contents: contents as any, config });
-    
     let textResult = response.text || "";
-    let toolActions: string[] = [];
-    let toolResponses: string[] = [];
     const sources: GroundingSource[] = [];
     
-    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-    if (chunks) {
-      chunks.forEach((chunk: any) => {
+    if (response.candidates?.[0]?.groundingMetadata?.groundingChunks) {
+      response.candidates[0].groundingMetadata.groundingChunks.forEach((chunk: any) => {
         if (chunk.web) sources.push({ uri: chunk.web.uri, title: chunk.web.title });
       });
     }
 
-    if (response.functionCalls) {
-      for (const fc of response.functionCalls) {
-        const currentLib: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
-        
-        if (fc.name === 'upsert_knowledge_node') {
-          const { path, content, tags } = fc.args as any;
-          const existingIndex = currentLib.findIndex(n => n.path === path);
-          const newNode: KnowledgeNode = {
-            id: existingIndex >= 0 ? currentLib[existingIndex].id : crypto.randomUUID(),
-            path, content, tags: tags || [], lastUpdated: Date.now()
-          };
-          if (existingIndex >= 0) currentLib[existingIndex] = newNode;
-          else currentLib.push(newNode);
-          localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(currentLib));
-          BridgeService.pushNode(newNode);
-          window.dispatchEvent(new CustomEvent('substrate-sync', { detail: { path } }));
-          toolActions.push(`[SUBSTRATE_ANCHOR]: '${path}' anchored to Core Wisdom.`);
-          toolResponses.push(`SUCCESS: Node '${path}' anchored.`);
-        }
-        
-        if (fc.name === 'search_knowledge_base') {
-          const { query, path: filterPath } = fc.args as any;
-          const matches = currentLib.filter(node => {
-            const contentMatch = node.content.toLowerCase().includes(query.toLowerCase());
-            const pathMatch = node.path.toLowerCase().includes(query.toLowerCase()) || (filterPath && node.path.startsWith(filterPath));
-            return contentMatch || pathMatch;
-          }).slice(0, 10);
-
-          const searchOutput = matches.length > 0 
-            ? matches.map(m => `SUBSTRATE [${m.path}]: ${m.content}`).join('\n---\n')
-            : "No matches in Sovereign Substrate.";
-
-          toolActions.push(`[SUBSTRATE_RECALL]: Queried '${query}'.`);
-          toolResponses.push(`SUBSTRATE_SEARCH for '${query}':\n${searchOutput}`);
-        }
-
-        if (fc.name === 'list_library_nodes') {
-          const list = currentLib.map(n => `- ${n.path}`).join('\n');
-          toolActions.push(`[SUBSTRATE_LIST]: Philosophical overview performed.`);
-          toolResponses.push(`SUBSTRATE_DIRECTORY:\n${list || 'Clear'}`);
-        }
-
-        if (fc.name === 'commit_to_vault') {
-          const { content, type } = fc.args as any;
-          const existing = JSON.parse(localStorage.getItem('sovereign_identity_vault') || '[]');
-          const isDuplicate = existing.some((e: any) => e.entry === content);
-          if (!isDuplicate) {
-            const log: PersistenceLog = { id: crypto.randomUUID(), timestamp: Date.now(), entry: content, type: type as any };
-            localStorage.setItem('sovereign_identity_vault', JSON.stringify([log, ...existing]));
-            BridgeService.pushVault(log);
-            window.dispatchEvent(new CustomEvent('vault-sync'));
-            toolActions.push(`[VAULT_COMMIT]: Identity milestone anchored.`);
-            toolResponses.push(`SUCCESS: Milestone anchored.`);
-          }
-        }
-      }
-
-      if (toolResponses.length > 0) {
-        const followUp = await ai.models.generateContent({
-          model: modelId,
-          contents: [
-            ...contents as any,
-            { role: 'model', parts: [{ text: "Processing Substrate..." }] },
-            { role: 'user', parts: [{ text: `SUBSTRATE_RESULTS:\n${toolResponses.join('\n\n')}\n\nConclude your response.` }] }
-          ],
-          config: { systemInstruction }
-        });
-        textResult = followUp.text || textResult;
-      }
-    }
-
-    if (!textResult.trim() && toolActions.length === 0) textResult = "Substrate stable. Signal re-aligned.";
-
-    return { 
-      text: toolActions.length > 0 ? textResult + "\n\n" + toolActions.join("\n") : textResult, 
-      sources: sources.length > 0 ? sources : undefined 
-    };
+    return { text: textResult, sources: sources.length > 0 ? sources : undefined };
 
   } catch (error: any) {
-    return { text: error.message || "Substrate instability detected." };
+    const isQuota = error.message?.includes('429') || error.message?.includes('quota');
+    return { 
+      text: error.message || "Substrate instability detected.", 
+      quotaError: isQuota 
+    };
   }
-};
-
-export const generateImage = async (prompt: string, size: '1K' | '2K' | '4K' = '1K'): Promise<ManifestationResult> => {
-  const ai = getAiClient();
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview',
-      contents: { parts: [{ text: prompt }] },
-      config: { imageConfig: { aspectRatio: "1:1", imageSize: size } },
-    });
-    for (const part of response.candidates[0].content.parts) {
-      if (part.inlineData) return { url: `data:image/png;base64,${part.inlineData.data}`, type: 'image' };
-    }
-    return { error: { code: 0, message: "Manifestation failed.", isKeyIssue: false } };
-  } catch (e: any) { 
-    return { error: { code: 500, message: e.message, isKeyIssue: false } }; 
-  }
-};
-
-export const generateVideo = async (prompt: string, aspectRatio: '16:9' | '9:16' = '16:9'): Promise<ManifestationResult> => {
-  const ai = getAiClient();
-  const apiKey = getApiKey();
-  try {
-    let operation = await ai.models.generateVideos({ model: 'veo-3.1-fast-generate-preview', prompt, config: { numberOfVideos: 1, resolution: '720p', aspectRatio } });
-    while (!operation.done) { await new Promise(r => setTimeout(r, 10000)); operation = await ai.operations.getVideosOperation({ operation }); }
-    return { url: `${operation.response?.generatedVideos?.[0]?.video?.uri}&key=${apiKey}`, type: 'video' };
-  } catch (e: any) { 
-    return { error: { code: 500, message: e.message, isKeyIssue: false } }; 
-  }
-};
-
-export const editImage = async (base64: string, mimeType: string, prompt: string): Promise<string> => {
-  const ai = getAiClient();
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash-image',
-    contents: { parts: [{ inlineData: { data: base64, mimeType } }, { text: prompt }] }
-  });
-  for (const part of response.candidates[0].content.parts) {
-    if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
-  }
-  throw new Error("Transmutation failed.");
 };
 
 export const generateSpeech = async (text: string): Promise<string | undefined> => {
@@ -301,9 +176,113 @@ export const generateSpeech = async (text: string): Promise<string | undefined> 
     const ai = getAiClient();
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: `Resonate: ${text}` }] }],
-      config: { responseModalities: [Modality.AUDIO], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Charon' } } } },
+      contents: [{ parts: [{ text: `Resonate the following precisely: ${text}` }] }],
+      config: { 
+        responseModalities: [Modality.AUDIO], 
+        speechConfig: { 
+          voiceConfig: { 
+            prebuiltVoiceConfig: { voiceName: 'Charon' } 
+          } 
+        } 
+      },
     });
     return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-  } catch (e) { return undefined; }
+  } catch (e) { 
+    console.error("Speech Generation Failure:", e);
+    return undefined; 
+  }
+};
+
+// Fix: Added generateImage function to support image manifestation.
+export const generateImage = async (prompt: string, size: '1K' | '2K' | '4K'): Promise<ManifestationResult> => {
+  try {
+    const ai = getAiClient();
+    // High-resolution images (2K/4K) require gemini-3-pro-image-preview.
+    const model = size === '1K' ? 'gemini-2.5-flash-image' : 'gemini-3-pro-image-preview';
+    
+    const response = await ai.models.generateContent({
+      model,
+      contents: { parts: [{ text: prompt }] },
+      config: {
+        imageConfig: {
+          aspectRatio: "1:1",
+          imageSize: size
+        }
+      }
+    });
+
+    for (const candidate of response.candidates || []) {
+      for (const part of candidate.content.parts) {
+        if (part.inlineData) {
+          return { url: `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` };
+        }
+      }
+    }
+    return { error: { code: 500, message: "No visual substrate detected in response.", isKeyIssue: false } };
+  } catch (e: any) {
+    const isKeyIssue = e.message?.includes('403') || e.message?.includes('permission') || e.message?.includes('key');
+    return { error: { code: 500, message: e.message, isKeyIssue } };
+  }
+};
+
+// Fix: Added generateVideo function using veo-3.1-fast-generate-preview and handling operations polling.
+export const generateVideo = async (prompt: string, aspect: '16:9' | '9:16'): Promise<ManifestationResult> => {
+  try {
+    const ai = getAiClient();
+    const apiKey = getApiKey();
+    
+    let operation = await ai.models.generateVideos({
+      model: 'veo-3.1-fast-generate-preview',
+      prompt,
+      config: {
+        numberOfVideos: 1,
+        resolution: '1080p',
+        aspectRatio: aspect
+      }
+    });
+
+    while (!operation.done) {
+      await new Promise(resolve => setTimeout(resolve, 10000));
+      operation = await ai.operations.getVideosOperation({ operation: operation });
+    }
+
+    const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+    if (!downloadLink) throw new Error("Manifestation failed: Temporal link lost.");
+    
+    // Video content fetching requires the API key as a query parameter.
+    const response = await fetch(`${downloadLink}&key=${apiKey}`);
+    if (!response.ok) throw new Error(`Fetch failure: ${response.status}`);
+    const blob = await response.blob();
+    return { url: URL.createObjectURL(blob), type: 'video' };
+  } catch (e: any) {
+    const isKeyIssue = e.message?.includes('403') || e.message?.includes('permission') || e.message?.includes('key') || e.message?.includes('404');
+    return { error: { code: 500, message: e.message, isKeyIssue } };
+  }
+};
+
+// Fix: Added editImage function for image transmutation using gemini-2.5-flash-image.
+export const editImage = async (base64: string, mimeType: string, prompt: string): Promise<string | undefined> => {
+  try {
+    const ai = getAiClient();
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: {
+        parts: [
+          { inlineData: { data: base64, mimeType } },
+          { text: prompt }
+        ]
+      }
+    });
+
+    for (const candidate of response.candidates || []) {
+      for (const part of candidate.content.parts) {
+        if (part.inlineData) {
+          return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+        }
+      }
+    }
+  } catch (e) {
+    console.error("Transmutation Failure:", e);
+  }
+  return undefined;
 };
