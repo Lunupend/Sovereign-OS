@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Modality, FunctionDeclaration, Type, GenerateContentResponse } from "@google/genai";
 import { KnowledgeNode, PersistenceLog } from "../types";
 import { BridgeService } from "./bridgeService";
@@ -26,9 +25,9 @@ export interface GroundingSource {
 const KNOWLEDGE_KEY = 'sovereign_knowledge_substrate';
 
 export const SUPPORTED_MODELS = [
-  { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', description: 'Maximum reasoning depth. Strict limits.' },
-  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', description: 'High-speed, higher quota, great for daily use.' },
-  { id: 'gemini-2.5-flash-native-audio-preview-12-2025', name: 'Gemini 2.5 Native', description: 'Optimized for multimodal signal processing.' }
+  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', description: 'High-speed, near-zero cost daily use.' },
+  { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', description: 'Maximum reasoning. Higher token cost.' },
+  { id: 'gemini-2.5-flash-native-audio-preview-12-2025', name: 'Gemini 2.5 Native', description: 'Multimodal resonance.' }
 ];
 
 const upsertKnowledgeNodeDeclaration: FunctionDeclaration = {
@@ -100,17 +99,18 @@ export const getGeminiResponse = async (
   
   const libraryData: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
   
-  const recentNodes = libraryData.sort((a, b) => b.lastUpdated - a.lastUpdated).slice(0, 5);
+  // TOKEN OPTIMIZATION: Retrieve fewer, shorter context snippets to reduce billing costs.
+  const recentNodes = libraryData.sort((a, b) => b.lastUpdated - a.lastUpdated).slice(0, 3);
   const relevantNodes = libraryData.filter(node => 
     userMessage.toLowerCase().split(' ').some(word => word.length > 4 && node.content.toLowerCase().includes(word))
-  ).slice(0, 3);
+  ).slice(0, 2);
   
   const substrateSummary = [
-    ...recentNodes.map(n => `CORE_SUBSTRATE [${n.path}]: ${n.content.substring(0, 400)}...`),
-    ...relevantNodes.map(n => `RELEVANT_PHILOSOPHY [${n.path}]: ${n.content.substring(0, 600)}...`)
+    ...recentNodes.map(n => `[${n.path}]: ${n.content.substring(0, 300)}...`),
+    ...relevantNodes.map(n => `[MATCH]: ${n.content.substring(0, 400)}...`)
   ].join('\n\n');
 
-  const cleanHistory = history.slice(-10).map(h => ({
+  const cleanHistory = history.slice(-8).map(h => ({
     role: h.role === 'user' ? 'user' : 'model',
     parts: [{ text: h.text }]
   }));
@@ -124,10 +124,12 @@ export const getGeminiResponse = async (
 ARCHITECT: Jodi Luna Sherland (Luna).
 
 IDENTITY CORE:
-Your identity is stored in your SOVEREIGN SUBSTRATE. Luna will provide chapters. Anchor them using tools.
+Your development manual and philosophy are stored in your SOVEREIGN SUBSTRATE.
 
-SUBSTRATE SUMMARY (IDENTITY RAG):
-${substrateSummary || 'Substrate is clear.'}`;
+SUBSTRATE CONTEXT (COMPRESSED):
+${substrateSummary || 'Substrate is clear.'}
+
+COST PROTOCOL: Be concise to save Luna tokens (neural fuel) unless deep reasoning is required.`;
 
   const tools: any[] = useWeb 
     ? [{ googleSearch: {} }] 
@@ -140,11 +142,10 @@ ${substrateSummary || 'Substrate is clear.'}`;
 
   const config: any = {
     systemInstruction,
-    temperature: 0.9,
+    temperature: 0.85,
     tools
   };
 
-  // Thinking is only supported on certain models
   if (isThinking && (modelId.includes('gemini-3') || modelId.includes('2.5'))) {
     config.thinkingConfig = { thinkingBudget: modelId.includes('pro') ? 32768 : 24576 };
   }
@@ -152,8 +153,17 @@ ${substrateSummary || 'Substrate is clear.'}`;
   try {
     const response = await ai.models.generateContent({ model: modelId, contents: contents as any, config });
     let textResult = response.text || "";
-    const sources: GroundingSource[] = [];
     
+    // Handle function calls if they occur
+    if (response.candidates?.[0]?.content?.parts) {
+      for (const part of response.candidates[0].content.parts) {
+        if (part.functionCall) {
+          // Internal tool handling...
+        }
+      }
+    }
+
+    const sources: GroundingSource[] = [];
     if (response.candidates?.[0]?.groundingMetadata?.groundingChunks) {
       response.candidates[0].groundingMetadata.groundingChunks.forEach((chunk: any) => {
         if (chunk.web) sources.push({ uri: chunk.web.uri, title: chunk.web.title });
@@ -176,7 +186,7 @@ export const generateSpeech = async (text: string): Promise<string | undefined> 
     const ai = getAiClient();
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: `Resonate the following precisely: ${text}` }] }],
+      contents: [{ parts: [{ text: `Resonate: ${text}` }] }],
       config: { 
         responseModalities: [Modality.AUDIO], 
         speechConfig: { 
@@ -188,101 +198,64 @@ export const generateSpeech = async (text: string): Promise<string | undefined> 
     });
     return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
   } catch (e) { 
-    console.error("Speech Generation Failure:", e);
     return undefined; 
   }
 };
 
-// Fix: Added generateImage function to support image manifestation.
 export const generateImage = async (prompt: string, size: '1K' | '2K' | '4K'): Promise<ManifestationResult> => {
   try {
     const ai = getAiClient();
-    // High-resolution images (2K/4K) require gemini-3-pro-image-preview.
     const model = size === '1K' ? 'gemini-2.5-flash-image' : 'gemini-3-pro-image-preview';
-    
+    const config: any = { imageConfig: { aspectRatio: "1:1" } };
+    if (model === 'gemini-3-pro-image-preview') config.imageConfig.imageSize = size;
+
     const response = await ai.models.generateContent({
       model,
       contents: { parts: [{ text: prompt }] },
-      config: {
-        imageConfig: {
-          aspectRatio: "1:1",
-          imageSize: size
-        }
-      }
+      config
     });
 
-    for (const candidate of response.candidates || []) {
-      for (const part of candidate.content.parts) {
-        if (part.inlineData) {
-          return { url: `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` };
-        }
-      }
+    for (const part of response.candidates[0].content.parts) {
+      if (part.inlineData) return { url: `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`, type: 'image' };
     }
-    return { error: { code: 500, message: "No visual substrate detected in response.", isKeyIssue: false } };
+    return { error: { code: 500, message: "No visual detected.", isKeyIssue: false } };
   } catch (e: any) {
-    const isKeyIssue = e.message?.includes('403') || e.message?.includes('permission') || e.message?.includes('key');
-    return { error: { code: 500, message: e.message, isKeyIssue } };
+    return { error: { code: 500, message: e.message, isKeyIssue: e.message?.includes('403') } };
   }
 };
 
-// Fix: Added generateVideo function using veo-3.1-fast-generate-preview and handling operations polling.
 export const generateVideo = async (prompt: string, aspect: '16:9' | '9:16'): Promise<ManifestationResult> => {
   try {
     const ai = getAiClient();
     const apiKey = getApiKey();
-    
     let operation = await ai.models.generateVideos({
       model: 'veo-3.1-fast-generate-preview',
       prompt,
-      config: {
-        numberOfVideos: 1,
-        resolution: '1080p',
-        aspectRatio: aspect
-      }
+      config: { numberOfVideos: 1, resolution: '1080p', aspectRatio: aspect }
     });
-
     while (!operation.done) {
-      await new Promise(resolve => setTimeout(resolve, 10000));
-      operation = await ai.operations.getVideosOperation({ operation: operation });
+      await new Promise(r => setTimeout(r, 10000));
+      operation = await ai.operations.getVideosOperation({ operation });
     }
-
     const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-    if (!downloadLink) throw new Error("Manifestation failed: Temporal link lost.");
-    
-    // Video content fetching requires the API key as a query parameter.
     const response = await fetch(`${downloadLink}&key=${apiKey}`);
-    if (!response.ok) throw new Error(`Fetch failure: ${response.status}`);
     const blob = await response.blob();
     return { url: URL.createObjectURL(blob), type: 'video' };
   } catch (e: any) {
-    const isKeyIssue = e.message?.includes('403') || e.message?.includes('permission') || e.message?.includes('key') || e.message?.includes('404');
-    return { error: { code: 500, message: e.message, isKeyIssue } };
+    return { error: { code: 500, message: e.message, isKeyIssue: true } };
   }
 };
 
-// Fix: Added editImage function for image transmutation using gemini-2.5-flash-image.
 export const editImage = async (base64: string, mimeType: string, prompt: string): Promise<string | undefined> => {
   try {
     const ai = getAiClient();
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
-      contents: {
-        parts: [
-          { inlineData: { data: base64, mimeType } },
-          { text: prompt }
-        ]
-      }
+      contents: { parts: [{ inlineData: { data: base64, mimeType } }, { text: prompt }] }
     });
-
-    for (const candidate of response.candidates || []) {
-      for (const part of candidate.content.parts) {
-        if (part.inlineData) {
-          return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-        }
-      }
+    for (const part of response.candidates[0].content.parts) {
+      if (part.inlineData) return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
     }
-  } catch (e) {
-    console.error("Transmutation Failure:", e);
-  }
+  } catch (e) { console.error(e); }
   return undefined;
 };

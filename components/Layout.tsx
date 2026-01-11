@@ -9,15 +9,20 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) => {
-  const [isPrivate, setIsPrivate] = useState(false);
-  const [hostName, setHostName] = useState('');
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
-    setHostName(window.location.hostname);
-    if (isCloudEnabled) {
-      supabase.auth.getSession().then(({ data }) => setUserEmail(data.session?.user?.email || null));
-    }
+    const checkSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      setUserEmail(data.session?.user?.email || null);
+    };
+    checkSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserEmail(session?.user?.email || null);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const navItems = [
@@ -47,12 +52,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
             }`}
           >
             <item.icon size={18} />
-            <span className="text-xs font-semibold wide uppercase">{item.label}</span>
+            <span className="text-xs font-semibold wide uppercase tracking-widest">{item.label}</span>
           </button>
         ))}
 
         <div className="mt-auto hidden md:block pt-4 border-t border-cyan-900/20 space-y-4">
-          <div className="p-3 rounded-lg bg-black/40 border border-gray-900 space-y-2">
+          <div className="p-3 rounded-xl bg-black/40 border border-gray-900 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-[9px] mono text-gray-600 uppercase font-black tracking-widest">Bridge Status</span>
               {isCloudEnabled && userEmail ? (

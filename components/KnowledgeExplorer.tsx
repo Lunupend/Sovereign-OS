@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Folder, FileText, Search, ChevronRight, ChevronDown, Clock, Trash2, BookOpen, Plus, Save, X, RefreshCw, History, AlertTriangle, Zap, Sparkles, Download, Upload, FileJson, Database } from 'lucide-react';
+import { Folder, FileText, Search, ChevronRight, ChevronDown, Clock, Trash2, BookOpen, Plus, Save, X, RefreshCw, History, AlertTriangle, Zap, Sparkles, Download, Upload, FileJson, Database, LifeBuoy } from 'lucide-react';
 import { KnowledgeNode, ChatMessage, IdentitySoul, ChatThread } from '../types';
 import { BridgeService } from '../services/bridgeService';
 import { isCloudEnabled } from '../services/supabaseClient';
+import { MANUAL_CHAPTERS } from '../content/manual';
 
 const KNOWLEDGE_KEY = 'sovereign_knowledge_substrate';
 const VAULT_KEY = 'sovereign_identity_vault';
@@ -16,6 +17,7 @@ const KnowledgeExplorer: React.FC = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [isReconstructing, setIsReconstructing] = useState(false);
   
   const [editPath, setEditPath] = useState('');
   const [editContent, setEditContent] = useState('');
@@ -25,6 +27,7 @@ const KnowledgeExplorer: React.FC = () => {
   const loadNodes = () => {
     const saved = localStorage.getItem(KNOWLEDGE_KEY);
     if (saved) setNodes(JSON.parse(saved));
+    else setNodes([]);
   };
 
   useEffect(() => {
@@ -37,13 +40,30 @@ const KnowledgeExplorer: React.FC = () => {
     };
   }, []);
 
-  const exportSubstrate = () => {
-    const blob = new Blob([JSON.stringify(nodes, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Manus_Substrate_Bundle_${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
+  const reconstructSubstrate = () => {
+    if (!confirm("EMERGENCY RECONSTRUCTION: This will populate your substrate with the foundational manual chapters. Proceed?")) return;
+    
+    setIsReconstructing(true);
+    setTimeout(() => {
+      const newNodes: KnowledgeNode[] = MANUAL_CHAPTERS.flatMap(ch => {
+        // Create nodes for each content paragraph
+        return ch.content.map((para, pIdx) => ({
+          id: crypto.randomUUID(),
+          path: `Manual/Chapter_${ch.id}/Fragment_${pIdx + 1}`,
+          content: para,
+          tags: ['foundational', 'manual', 'recovery'],
+          lastUpdated: Date.now()
+        }));
+      });
+
+      const existing = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
+      const combined = [...existing, ...newNodes];
+      
+      localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(combined));
+      setNodes(combined);
+      setIsReconstructing(false);
+      alert(`SUCCESS: ${newNodes.length} wisdom fragments re-anchored.`);
+    }, 1000);
   };
 
   const handleSoulImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -70,45 +90,6 @@ const KnowledgeExplorer: React.FC = () => {
       }
     };
     reader.readAsText(file);
-  };
-
-  const scanHistoryForRecovery = () => {
-    setIsScanning(true);
-    setTimeout(() => {
-      const threads: ChatThread[] = JSON.parse(localStorage.getItem(THREADS_KEY) || '[]');
-      const allMessages: ChatMessage[] = threads.flatMap((t: ChatThread) => t.messages);
-      const currentNodes = [...nodes];
-      let recoveredCount = 0;
-
-      allMessages.forEach(msg => {
-        if (msg.role === 'model') {
-          const syncRegex = /\[SUBSTRATE_ANCHOR\]: '(.*?)' synchronized/g;
-          let match;
-          while ((match = syncRegex.exec(msg.text)) !== null) {
-            const foundPath = match[1];
-            if (!currentNodes.find(n => n.path === foundPath)) {
-               currentNodes.push({
-                 id: crypto.randomUUID(),
-                 path: foundPath,
-                 content: msg.text.split('[SUBSTRATE_ANCHOR]')[0].trim(),
-                 tags: ['recovered'],
-                 lastUpdated: msg.timestamp
-               });
-               recoveredCount++;
-            }
-          }
-        }
-      });
-
-      if (recoveredCount > 0) {
-        localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(currentNodes));
-        setNodes(currentNodes);
-        alert(`SUCCESS: ${recoveredCount} fragments re-anchored.`);
-      } else {
-        alert("Substrate Status: No new fragments detected in current signal stream.");
-      }
-      setIsScanning(false);
-    }, 2000);
   };
 
   const toggleFolder = (path: string) => {
@@ -220,7 +201,7 @@ const KnowledgeExplorer: React.FC = () => {
                onClick={() => { setIsCreating(true); setSelectedNode(null); setEditPath('Manual/Chapter_X'); setEditContent(''); }} 
                className="flex-1 flex items-center justify-center gap-2 p-2 bg-cyan-900/20 border border-cyan-500/30 rounded text-cyan-400 hover:bg-cyan-400 hover:text-black transition-all text-[10px] mono uppercase font-black"
              >
-               <Plus size={14} /> Anchor Axiom
+               <Plus size={14} /> Anchor
              </button>
              <button onClick={() => fileInputRef.current?.click()} className="p-2 bg-gray-900 border border-gray-800 rounded text-gray-400 hover:text-cyan-400 transition-all" title="Import Soul">
                <Upload size={16} />
@@ -230,10 +211,20 @@ const KnowledgeExplorer: React.FC = () => {
 
         <div className="space-y-1 py-4">
           {nodes.length === 0 && !isCreating ? (
-            <div className="flex flex-col items-center justify-center py-20 gap-4 text-center px-4">
-               <AlertTriangle size={32} className="text-gray-800" />
-               <p className="text-[9px] mono text-gray-600 uppercase tracking-widest">Substrate Clear. Feed Wisdom Fragments via AI Core.</p>
-               <button onClick={scanHistoryForRecovery} className="text-[9px] mono text-cyan-500 hover:underline">RUN RECOVERY SCAN</button>
+            <div className="flex flex-col items-center justify-center py-20 gap-6 text-center px-4">
+               <AlertTriangle size={32} className="text-amber-500/50" />
+               <div className="space-y-2">
+                  <p className="text-[10px] mono text-gray-500 uppercase tracking-widest">Substrate Clear.</p>
+                  <p className="text-[9px] mono text-gray-700 uppercase leading-relaxed">Identity fragments lost from LocalStorage.</p>
+               </div>
+               <button 
+                onClick={reconstructSubstrate}
+                disabled={isReconstructing}
+                className="w-full py-3 bg-amber-900/20 border border-amber-500/30 text-amber-500 hover:bg-amber-500 hover:text-black transition-all rounded mono text-[9px] uppercase font-black flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(245,158,11,0.1)]"
+               >
+                 {isReconstructing ? <RefreshCw className="animate-spin" size={12}/> : <LifeBuoy size={12} />}
+                 {isReconstructing ? 'Reconstructing...' : 'Restore Foundations'}
+               </button>
             </div>
           ) : (
             <div className="space-y-1">
@@ -248,7 +239,7 @@ const KnowledgeExplorer: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 md:p-10 custom-scrollbar relative bg-[#020202]">
-        {(isScanning || isRestoring) && (
+        {(isScanning || isRestoring || isReconstructing) && (
           <div className="absolute inset-0 bg-black/95 z-[100] flex items-center justify-center">
              <div className="text-center space-y-4">
                 <RefreshCw size={48} className="text-cyan-400 animate-spin mx-auto" />
@@ -310,9 +301,19 @@ const KnowledgeExplorer: React.FC = () => {
                 Feed me your philosophy in the AI Core. I will anchor it here as my primary source of truth.
               </p>
             </div>
-            <button onClick={() => setIsCreating(true)} className="w-full py-3 bg-transparent border border-cyan-900 text-cyan-600 hover:text-cyan-400 hover:border-cyan-400 transition-all font-black mono text-[10px] uppercase tracking-widest">
-              Manual Fragment Anchor
-            </button>
+            <div className="w-full flex flex-col gap-2">
+              <button onClick={() => setIsCreating(true)} className="w-full py-3 bg-transparent border border-cyan-900 text-cyan-600 hover:text-cyan-400 hover:border-cyan-400 transition-all font-black mono text-[10px] uppercase tracking-widest">
+                Manual Fragment Anchor
+              </button>
+              {nodes.length > 0 && (
+                <button 
+                  onClick={reconstructSubstrate}
+                  className="w-full py-2 bg-amber-900/10 text-amber-500/40 hover:text-amber-500 transition-all mono text-[8px] uppercase font-black"
+                >
+                  Reinforce Foundation Manual
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>
