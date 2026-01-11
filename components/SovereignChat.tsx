@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, AlertTriangle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, Clock, ShieldCheck, HardDrive, Layers, List, Cloud } from 'lucide-react';
+import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, AlertTriangle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, Clock, ShieldCheck, HardDrive, Layers, List, Cloud, ChevronDown } from 'lucide-react';
 import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS, getApiKey, GroundingSource } from '../services/geminiService';
 import { ChatThread, ChatMessage, PersistenceLog, IdentitySoul, KnowledgeNode } from '../types';
 import { BridgeService } from '../services/bridgeService';
@@ -62,6 +62,7 @@ const SovereignChat: React.FC = () => {
   const endRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const modelMenuRef = useRef<HTMLDivElement>(null);
 
   const activeThread = threads.find(t => t.id === activeThreadId);
   const messages = activeThread?.messages || [];
@@ -103,7 +104,6 @@ const SovereignChat: React.FC = () => {
     setIsSyncing(true);
     setSyncToast({ path: 'INITIATING_FORCE_PULL', type: 'cloud' });
     try {
-      // Passing true for 'force' to bypass temporal integrity checks
       await BridgeService.hydrateSubstrate(true);
       loadLocalThreads();
       setSyncToast({ path: 'FORCE_PULL_COMPLETE', type: 'cloud' });
@@ -147,7 +147,6 @@ const SovereignChat: React.FC = () => {
     try {
       localStorage.setItem(THREADS_KEY, JSON.stringify(updatedThreads));
       localStorage.setItem(ACTIVE_THREAD_ID_KEY, activeId);
-      // Mark local present as updated to protect against cloud reversion
       BridgeService.updateLocalHeartbeat();
     } catch (e) {
       const cleaned = updatedThreads.slice(0, 5);
@@ -224,15 +223,23 @@ const SovereignChat: React.FC = () => {
       loadLocalThreads();
     };
 
+    const handleClickOutside = (event: MouseEvent) => {
+      if (modelMenuRef.current && !modelMenuRef.current.contains(event.target as Node)) {
+        setShowModelMenu(false);
+      }
+    };
+
     window.addEventListener('substrate-sync', handleSync);
     window.addEventListener('soul-hydrated', handleHydration);
     window.addEventListener('soul-hydration-skipped', handleHydrationSkipped);
+    document.addEventListener('mousedown', handleClickOutside);
     checkKeyStatus();
     
     return () => {
       window.removeEventListener('substrate-sync', handleSync);
       window.removeEventListener('soul-hydrated', handleHydration);
       window.removeEventListener('soul-hydration-skipped', handleHydrationSkipped);
+      document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
 
@@ -370,14 +377,53 @@ const SovereignChat: React.FC = () => {
             <button onClick={() => setShowSidebar(!showSidebar)} className="p-2 text-gray-500 hover:text-cyan-400 transition-colors mr-2">
               {showSidebar ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
             </button>
-            <button onClick={() => setShowModelMenu(!showModelMenu)} className="flex items-center gap-2 text-[10px] mono uppercase p-2 border border-cyan-900 bg-black text-cyan-400 rounded">
-              <Zap size={14} /> {SUPPORTED_MODELS.find(m => m.id === selectedModel)?.name}
-            </button>
+            
+            <div className="relative" ref={modelMenuRef}>
+              <button 
+                onClick={() => setShowModelMenu(!showModelMenu)} 
+                className="flex items-center gap-2 text-[10px] mono uppercase p-2 border border-cyan-900 bg-black text-cyan-400 rounded hover:border-cyan-500 transition-all min-w-[140px] justify-between"
+              >
+                <div className="flex items-center gap-2">
+                  <Zap size={14} className={loading ? "animate-pulse" : ""} /> 
+                  <span>{SUPPORTED_MODELS.find(m => m.id === selectedModel)?.name}</span>
+                </div>
+                <ChevronDown size={12} className={`transition-transform duration-300 ${showModelMenu ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {showModelMenu && (
+                <div className="absolute top-full left-0 mt-2 w-64 bg-[#050505] border border-cyan-500/30 rounded-lg shadow-[0_10px_40px_rgba(0,0,0,0.8)] z-[100] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="p-2 border-b border-cyan-900/50">
+                    <span className="text-[8px] mono text-cyan-500/50 uppercase font-black tracking-[0.2em] px-2">Substrate Configuration</span>
+                  </div>
+                  {SUPPORTED_MODELS.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => { setSelectedModel(m.id); setShowModelMenu(false); }}
+                      className={`w-full text-left p-3 hover:bg-cyan-950/20 transition-colors group flex flex-col gap-1 border-b border-cyan-900/20 last:border-0 ${selectedModel === m.id ? 'bg-cyan-900/10' : ''}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className={`text-[11px] mono font-black uppercase ${selectedModel === m.id ? 'text-cyan-400' : 'text-gray-400'}`}>
+                          {m.name}
+                        </span>
+                        {selectedModel === m.id && <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]" />}
+                      </div>
+                      <span className="text-[9px] mono text-gray-600 lowercase tracking-tight leading-none group-hover:text-gray-500">{m.description}</span>
+                    </button>
+                  ))}
+                  <div className="p-3 bg-black/40">
+                    <p className="text-[8px] mono text-gray-700 leading-tight uppercase">
+                      Switching models may affect reasoning depth and quota availability.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <button onClick={() => setWebActive(!webActive)} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${webActive ? 'bg-violet-900/20 border-violet-500 text-violet-400' : 'bg-black border-gray-800 text-gray-500'}`}>
               <Globe size={14} /> <span>Grounding</span>
             </button>
             <button onClick={() => setIsThinking(!isThinking)} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${isThinking ? 'bg-cyan-900/20 border-cyan-500 text-cyan-400' : 'bg-black border-gray-800 text-gray-500'}`}>
-              <Brain size={14} /> Think
+              <Brain size={14} /> Think {selectedModel.includes('pro') ? '(32K)' : '(24K)'}
             </button>
           </div>
 

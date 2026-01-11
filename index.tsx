@@ -1,5 +1,5 @@
 
-import React, { ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import { Download, AlertTriangle } from 'lucide-react';
@@ -16,12 +16,12 @@ interface State {
  * Standard Error Boundary to catch substrate crashes and provide 
  * emergency data recovery options.
  */
-// Fix: Added explicit constructor to properly initialize component and ensure property access on 'this.props' is correctly handled by TypeScript.
-class ErrorBoundary extends React.Component<Props, State> {
-  constructor(props: Props) {
-    super(props);
-    this.state = { hasError: false };
-  }
+// Fix: Use named 'Component' import and class fields for state to ensure TypeScript correctly identifies properties on 'this'.
+class ErrorBoundary extends Component<Props, State> {
+  // Fix: Explicitly declare and initialize state property to resolve "Property 'state' does not exist" errors.
+  public state: State = {
+    hasError: false
+  };
 
   public static getDerivedStateFromError(_: Error): State {
     return { hasError: true };
@@ -48,6 +48,7 @@ class ErrorBoundary extends React.Component<Props, State> {
   };
 
   public render() {
+    // Fix: Access state and props from this, ensuring the Component generics are respected by the compiler.
     if (this.state.hasError) {
       return (
         <div className="h-full w-full bg-[#050005] flex items-center justify-center p-10 font-mono text-cyan-400">
@@ -86,7 +87,7 @@ class ErrorBoundary extends React.Component<Props, State> {
       );
     }
     
-    // Fix: access children from this.props which is now properly inferred from React.Component generic
+    // Fix: Inherited props now correctly identifies children property from Props interface.
     return this.props.children;
   }
 }
