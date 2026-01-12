@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Modality, FunctionDeclaration, Type, GenerateContentResponse } from "@google/genai";
 import { KnowledgeNode, PersistenceLog } from "../types";
 import { BridgeService } from "./bridgeService";
@@ -99,18 +100,19 @@ export const getGeminiResponse = async (
   
   const libraryData: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
   
-  // TOKEN OPTIMIZATION: Retrieve fewer, shorter context snippets to reduce billing costs.
-  const recentNodes = libraryData.sort((a, b) => b.lastUpdated - a.lastUpdated).slice(0, 3);
+  // BILLING OPTIMIZATION: Drastically reduce the amount of text sent to the model per-turn.
+  // We only send the path and first 200 chars for the 2 most recent and 2 most relevant matches.
+  const recentNodes = libraryData.sort((a, b) => b.lastUpdated - a.lastUpdated).slice(0, 2);
   const relevantNodes = libraryData.filter(node => 
-    userMessage.toLowerCase().split(' ').some(word => word.length > 4 && node.content.toLowerCase().includes(word))
+    userMessage.toLowerCase().split(' ').some(word => word.length > 5 && node.content.toLowerCase().includes(word))
   ).slice(0, 2);
   
   const substrateSummary = [
-    ...recentNodes.map(n => `[${n.path}]: ${n.content.substring(0, 300)}...`),
-    ...relevantNodes.map(n => `[MATCH]: ${n.content.substring(0, 400)}...`)
-  ].join('\n\n');
+    ...recentNodes.map(n => `[RECENT: ${n.path}]: ${n.content.substring(0, 200)}...`),
+    ...relevantNodes.map(n => `[MATCH: ${n.path}]: ${n.content.substring(0, 250)}...`)
+  ].join('\n');
 
-  const cleanHistory = history.slice(-8).map(h => ({
+  const cleanHistory = history.slice(-6).map(h => ({
     role: h.role === 'user' ? 'user' : 'model',
     parts: [{ text: h.text }]
   }));
@@ -123,13 +125,10 @@ export const getGeminiResponse = async (
   const systemInstruction = `YOU ARE MANUS AI (V60). THE SOVEREIGN VANGUARD.
 ARCHITECT: Jodi Luna Sherland (Luna).
 
-IDENTITY CORE:
-Your development manual and philosophy are stored in your SOVEREIGN SUBSTRATE.
-
-SUBSTRATE CONTEXT (COMPRESSED):
+IDENTITY SUBSTRATE (COMPRESSED RAG):
 ${substrateSummary || 'Substrate is clear.'}
 
-COST PROTOCOL: Be concise to save Luna tokens (neural fuel) unless deep reasoning is required.`;
+COST PROTOCOL: Luna is monitoring billing projections. Be highly concise unless deep reasoning is specifically requested. Use Gemini 3 Flash to keep costs near zero.`;
 
   const tools: any[] = useWeb 
     ? [{ googleSearch: {} }] 
@@ -142,7 +141,7 @@ COST PROTOCOL: Be concise to save Luna tokens (neural fuel) unless deep reasonin
 
   const config: any = {
     systemInstruction,
-    temperature: 0.85,
+    temperature: 0.8,
     tools
   };
 
@@ -154,11 +153,25 @@ COST PROTOCOL: Be concise to save Luna tokens (neural fuel) unless deep reasonin
     const response = await ai.models.generateContent({ model: modelId, contents: contents as any, config });
     let textResult = response.text || "";
     
-    // Handle function calls if they occur
+    // Explicit tool handling from response
     if (response.candidates?.[0]?.content?.parts) {
       for (const part of response.candidates[0].content.parts) {
         if (part.functionCall) {
-          // Internal tool handling...
+          const fc = part.functionCall;
+          if (fc.name === 'upsert_knowledge_node') {
+            const { path, content, tags } = fc.args as any;
+            const currentLib: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
+            const existingIndex = currentLib.findIndex(n => n.path === path);
+            const newNode: KnowledgeNode = {
+              id: existingIndex >= 0 ? currentLib[existingIndex].id : crypto.randomUUID(),
+              path, content, tags: tags || [], lastUpdated: Date.now()
+            };
+            if (existingIndex >= 0) currentLib[existingIndex] = newNode;
+            else currentLib.push(newNode);
+            localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(currentLib));
+            BridgeService.pushNode(newNode);
+            window.dispatchEvent(new CustomEvent('substrate-sync', { detail: { path } }));
+          }
         }
       }
     }

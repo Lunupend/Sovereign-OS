@@ -1,4 +1,3 @@
-
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
@@ -16,10 +15,10 @@ interface State {
  * Standard Error Boundary to catch substrate crashes and provide 
  * emergency data recovery options.
  */
-// Fix: Use named 'Component' import and class fields for state to ensure TypeScript correctly identifies properties on 'this'.
-// Update: Use React.Component specifically to ensure inherited props are recognized.
-class ErrorBoundary extends React.Component<Props, State> {
-  // Fix: Use a constructor to initialize state and call super(props) to ensure 'this.props' is available.
+// Fix: Use the named 'Component' import with explicit <Props, State> generics 
+// to ensure TypeScript correctly identifies inherited properties 'this.props' and 'this.state'.
+class ErrorBoundary extends Component<Props, State> {
+  // Fix: The constructor must call super(props) and initialize state to ensure the component is correctly bootstrapped.
   constructor(props: Props) {
     super(props);
     this.state = {
@@ -52,7 +51,7 @@ class ErrorBoundary extends React.Component<Props, State> {
   };
 
   public render() {
-    // Fix: Access state and props from this, ensuring the Component generics are respected by the compiler.
+    // Fix: Accessing 'this.state' and 'this.props' is now safe as ErrorBoundary correctly extends Component<Props, State>.
     if (this.state.hasError) {
       return (
         <div className="h-full w-full bg-[#050005] flex items-center justify-center p-10 font-mono text-cyan-400">
@@ -91,7 +90,7 @@ class ErrorBoundary extends React.Component<Props, State> {
       );
     }
     
-    // Fix: Inherited props now correctly identifies children property from Props interface.
+    // Fix: 'this.props' now correctly identifies the 'children' property from the Props interface.
     return this.props.children;
   }
 }

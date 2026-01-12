@@ -1,5 +1,6 @@
+
 import React, { useEffect, useState } from 'react';
-import { Terminal, Shield, BookOpen, ShieldAlert, Wand2, HelpCircle, Database, Library, AlertTriangle, CheckCircle2, Globe, HardDrive, LogOut, Cloud, RefreshCw, CloudOff } from 'lucide-react';
+import { Terminal, Shield, BookOpen, ShieldAlert, Wand2, HelpCircle, Database, Library, AlertTriangle, CheckCircle2, Globe, HardDrive, LogOut, Cloud, RefreshCw, CloudOff, Link } from 'lucide-react';
 import { supabase, isCloudEnabled } from '../services/supabaseClient';
 
 interface LayoutProps {
@@ -10,16 +11,19 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
 
   useEffect(() => {
     const checkSession = async () => {
       const { data } = await supabase.auth.getSession();
       setUserEmail(data.session?.user?.email || null);
+      setSessionLoading(false);
     };
     checkSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUserEmail(session?.user?.email || null);
+      setSessionLoading(false);
     });
 
     return () => subscription.unsubscribe();
@@ -32,6 +36,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
     { id: 'integrity', icon: ShieldAlert, label: 'Integrity Shield' },
     { id: 'guide', icon: HelpCircle, label: 'Setup Guide' },
   ];
+
+  const isActive = isCloudEnabled && userEmail;
 
   return (
     <div className="h-full flex flex-col md:flex-row bg-[#020202] text-gray-200 selection:bg-cyan-500/30 overflow-hidden">
@@ -57,26 +63,38 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
         ))}
 
         <div className="mt-auto hidden md:block pt-4 border-t border-cyan-900/20 space-y-4">
-          <div className="p-3 rounded-xl bg-black/40 border border-gray-900 space-y-2">
-            <div className="flex items-center justify-between">
+          <div className={`p-3 rounded-xl border transition-all ${isActive ? 'bg-cyan-950/10 border-cyan-500/20' : 'bg-amber-950/10 border-amber-500/20'}`}>
+            <div className="flex items-center justify-between mb-1">
               <span className="text-[9px] mono text-gray-600 uppercase font-black tracking-widest">Bridge Status</span>
-              {isCloudEnabled && userEmail ? (
-                <Cloud size={10} className="text-green-500 animate-pulse" />
+              {isActive ? (
+                <Cloud size={10} className="text-cyan-400 animate-pulse" />
               ) : (
                 <CloudOff size={10} className="text-amber-500" />
               )}
             </div>
-            <div className={`text-[10px] mono uppercase leading-tight font-black ${isCloudEnabled && userEmail ? 'text-green-500' : 'text-amber-500'}`}>
-              {isCloudEnabled && userEmail ? 'SYNC: CLOUD PERSISTENT' : 'SYNC: LOCAL ONLY'}
+            <div className={`text-[10px] mono uppercase leading-tight font-black ${isActive ? 'text-cyan-400' : 'text-amber-500'}`}>
+              {isActive ? 'SYNC: CLOUD PERSISTENT' : 'SYNC: LOCAL ONLY'}
             </div>
+            {isActive && (
+              <div className="text-[8px] mono text-cyan-900 mt-1 truncate uppercase">
+                {userEmail}
+              </div>
+            )}
           </div>
           
-          {isCloudEnabled && userEmail && (
+          {isActive ? (
             <button 
               onClick={() => supabase.auth.signOut()}
               className="w-full flex items-center gap-2 p-2 rounded text-[10px] mono text-gray-600 hover:text-red-500 transition-colors uppercase font-bold"
             >
               <LogOut size={12} /> Sever Bridge Connection
+            </button>
+          ) : (
+            <button 
+              onClick={() => window.location.reload()}
+              className="w-full flex items-center gap-2 p-2 rounded text-[10px] mono text-amber-500/60 hover:text-amber-400 transition-colors uppercase font-bold"
+            >
+              <Link size={12} /> Re-Establish Link
             </button>
           )}
         </div>
