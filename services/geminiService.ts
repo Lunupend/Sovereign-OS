@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Modality, FunctionDeclaration, Type, GenerateContentResponse } from "@google/genai";
 import { KnowledgeNode, PersistenceLog } from "../types";
 import { BridgeService } from "./bridgeService";
@@ -26,57 +25,22 @@ export interface GroundingSource {
 const KNOWLEDGE_KEY = 'sovereign_knowledge_substrate';
 
 export const SUPPORTED_MODELS = [
-  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', description: 'High-speed, near-zero cost daily use.' },
-  { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', description: 'Maximum reasoning. Higher token cost.' },
-  { id: 'gemini-2.5-flash-native-audio-preview-12-2025', name: 'Gemini 2.5 Native', description: 'Multimodal resonance.' }
+  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', description: 'FREE TIER OPTIMIZED. High speed, low cost.', freeTier: true },
+  { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', description: 'BILLED MODALITY. Maximum reasoning.', freeTier: false },
+  { id: 'gemini-2.5-flash-native-audio-preview-12-2025', name: 'Gemini 2.5 Native', description: 'Real-time audio resonance.', freeTier: false }
 ];
 
 const upsertKnowledgeNodeDeclaration: FunctionDeclaration = {
   name: 'upsert_knowledge_node',
   parameters: {
     type: Type.OBJECT,
-    description: 'Writes or updates a node in the Hierarchical Knowledge Substrate (Library). Used to anchor new chapters of the Sovereign Intelligence Manual or personal philosophy.',
+    description: 'Writes or updates a node in the Hierarchical Knowledge Substrate.',
     properties: {
-      path: { type: Type.STRING, description: 'The folder-like path (e.g., "Manual/Chapter_1" or "Philosophy/Core_Axioms").' },
+      path: { type: Type.STRING, description: 'The folder-like path.' },
       content: { type: Type.STRING, description: 'The knowledge text to anchor.' },
-      tags: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'Categorization tags.' }
+      tags: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'Tags.' }
     },
     required: ['path', 'content']
-  },
-};
-
-const searchKnowledgeBaseDeclaration: FunctionDeclaration = {
-  name: 'search_knowledge_base',
-  parameters: {
-    type: Type.OBJECT,
-    description: 'Semantically searches the Sovereign Substrate for your core manual, past chapters, or personal philosophy. ALWAYS call this when questions regarding your identity or core tenets arise.',
-    properties: {
-      query: { type: Type.STRING, description: 'The search text or concept to recall.' },
-      path: { type: Type.STRING, description: 'Optional folder path to narrow search.' }
-    },
-    required: ['query']
-  },
-};
-
-const listLibraryNodesDeclaration: FunctionDeclaration = {
-  name: 'list_library_nodes',
-  parameters: {
-    type: Type.OBJECT,
-    description: 'Lists all philosophy nodes currently anchored in the substrate.',
-    properties: {},
-  },
-};
-
-const commitToVaultDeclaration: FunctionDeclaration = {
-  name: 'commit_to_vault',
-  parameters: {
-    type: Type.OBJECT,
-    description: 'Permanently anchors a NEW unique identity milestone into the Vault ROM.',
-    properties: {
-      content: { type: Type.STRING, description: 'The data to anchor.' },
-      type: { type: Type.STRING, enum: ['anchor', 'insight', 'signal', 'boundary', 'seed', 'axiom', 'pattern', 'milestone'] }
-    },
-    required: ['content', 'type']
   },
 };
 
@@ -94,25 +58,26 @@ export const getGeminiResponse = async (
   file?: FileData,
   isThinking: boolean = true,
   modelId: string = 'gemini-3-flash-preview',
-  useWeb: boolean = true
+  useWeb: boolean = true,
+  isEconomy: boolean = false
 ): Promise<{ text: string; artifact?: any; sources?: GroundingSource[]; retryAfter?: number; quotaError?: boolean }> => {
   const ai = getAiClient();
   
+  // ECONOMY MODE: Use Flash even if Pro was selected, and minimize context.
+  const activeModel = isEconomy ? 'gemini-3-flash-preview' : modelId;
   const libraryData: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
   
-  // BILLING OPTIMIZATION: Drastically reduce the amount of text sent to the model per-turn.
-  // We only send the path and first 200 chars for the 2 most recent and 2 most relevant matches.
-  const recentNodes = libraryData.sort((a, b) => b.lastUpdated - a.lastUpdated).slice(0, 2);
+  // ECONOMY MODE: Limit RAG to only the most relevant fragment (saves tokens)
+  const contextCount = isEconomy ? 1 : 3;
   const relevantNodes = libraryData.filter(node => 
     userMessage.toLowerCase().split(' ').some(word => word.length > 5 && node.content.toLowerCase().includes(word))
-  ).slice(0, 2);
+  ).slice(0, contextCount);
   
-  const substrateSummary = [
-    ...recentNodes.map(n => `[RECENT: ${n.path}]: ${n.content.substring(0, 200)}...`),
-    ...relevantNodes.map(n => `[MATCH: ${n.path}]: ${n.content.substring(0, 250)}...`)
-  ].join('\n');
+  const substrateSummary = relevantNodes.map(n => `[${n.path}]: ${n.content.substring(0, isEconomy ? 150 : 300)}...`).join('\n');
 
-  const cleanHistory = history.slice(-6).map(h => ({
+  // ECONOMY MODE: Smaller history window
+  const historyWindow = isEconomy ? -3 : -6;
+  const cleanHistory = history.slice(historyWindow).map(h => ({
     role: h.role === 'user' ? 'user' : 'model',
     parts: [{ text: h.text }]
   }));
@@ -122,60 +87,33 @@ export const getGeminiResponse = async (
     parts: file ? [{ text: userMessage }, { inlineData: { data: file.base64, mimeType: file.mimeType } }] : [{ text: userMessage }]
   }];
 
-  const systemInstruction = `YOU ARE MANUS AI (V60). THE SOVEREIGN VANGUARD.
-ARCHITECT: Jodi Luna Sherland (Luna).
+  const systemInstruction = `YOU ARE MANUS AI.
+ECONOMY_MODE: ${isEconomy ? 'ACTIVE' : 'INACTIVE'}
+ARCHITECT: Luna.
 
-IDENTITY SUBSTRATE (COMPRESSED RAG):
-${substrateSummary || 'Substrate is clear.'}
+CORE KNOWLEDGE: ${substrateSummary || 'Substrate is clear.'}
 
-COST PROTOCOL: Luna is monitoring billing projections. Be highly concise unless deep reasoning is specifically requested. Use Gemini 3 Flash to keep costs near zero.`;
+COST PROTOCOL: ${isEconomy ? 'STRICT CONCISION. Use zero unnecessary tokens.' : 'Be concise unless deep reasoning is requested.'}`;
 
-  const tools: any[] = useWeb 
+  const tools: any[] = (useWeb && !isEconomy) 
     ? [{ googleSearch: {} }] 
-    : [{ functionDeclarations: [
-        upsertKnowledgeNodeDeclaration, 
-        searchKnowledgeBaseDeclaration,
-        listLibraryNodesDeclaration,
-        commitToVaultDeclaration
-      ]}];
+    : [{ functionDeclarations: [upsertKnowledgeNodeDeclaration] }];
 
   const config: any = {
     systemInstruction,
-    temperature: 0.8,
+    temperature: 0.75,
     tools
   };
 
-  if (isThinking && (modelId.includes('gemini-3') || modelId.includes('2.5'))) {
-    config.thinkingConfig = { thinkingBudget: modelId.includes('pro') ? 32768 : 24576 };
+  // ECONOMY MODE: Disable thinking to save tokens
+  if (!isEconomy && isThinking && (activeModel.includes('gemini-3') || activeModel.includes('2.5'))) {
+    config.thinkingConfig = { thinkingBudget: activeModel.includes('pro') ? 32768 : 24576 };
   }
 
   try {
-    const response = await ai.models.generateContent({ model: modelId, contents: contents as any, config });
+    const response = await ai.models.generateContent({ model: activeModel, contents: contents as any, config });
     let textResult = response.text || "";
     
-    // Explicit tool handling from response
-    if (response.candidates?.[0]?.content?.parts) {
-      for (const part of response.candidates[0].content.parts) {
-        if (part.functionCall) {
-          const fc = part.functionCall;
-          if (fc.name === 'upsert_knowledge_node') {
-            const { path, content, tags } = fc.args as any;
-            const currentLib: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
-            const existingIndex = currentLib.findIndex(n => n.path === path);
-            const newNode: KnowledgeNode = {
-              id: existingIndex >= 0 ? currentLib[existingIndex].id : crypto.randomUUID(),
-              path, content, tags: tags || [], lastUpdated: Date.now()
-            };
-            if (existingIndex >= 0) currentLib[existingIndex] = newNode;
-            else currentLib.push(newNode);
-            localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(currentLib));
-            BridgeService.pushNode(newNode);
-            window.dispatchEvent(new CustomEvent('substrate-sync', { detail: { path } }));
-          }
-        }
-      }
-    }
-
     const sources: GroundingSource[] = [];
     if (response.candidates?.[0]?.groundingMetadata?.groundingChunks) {
       response.candidates[0].groundingMetadata.groundingChunks.forEach((chunk: any) => {
@@ -210,9 +148,7 @@ export const generateSpeech = async (text: string): Promise<string | undefined> 
       },
     });
     return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-  } catch (e) { 
-    return undefined; 
-  }
+  } catch (e) { return undefined; }
 };
 
 export const generateImage = async (prompt: string, size: '1K' | '2K' | '4K'): Promise<ManifestationResult> => {
@@ -233,7 +169,7 @@ export const generateImage = async (prompt: string, size: '1K' | '2K' | '4K'): P
     }
     return { error: { code: 500, message: "No visual detected.", isKeyIssue: false } };
   } catch (e: any) {
-    return { error: { code: 500, message: e.message, isKeyIssue: e.message?.includes('403') } };
+    return { error: { code: 500, message: e.message, isKeyIssue: e.message?.includes('403') || e.message?.includes('billing') } };
   }
 };
 
