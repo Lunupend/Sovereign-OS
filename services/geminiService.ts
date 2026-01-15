@@ -24,6 +24,7 @@ export interface GroundingSource {
 }
 
 const KNOWLEDGE_KEY = 'sovereign_knowledge_substrate';
+const SESSION_KEY_OVERRIDE = 'sovereign_session_api_key';
 
 export const SUPPORTED_MODELS = [
   { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', description: 'FREE TIER OPTIMIZED. High speed, near-zero cost.', freeTier: true },
@@ -45,7 +46,15 @@ const upsertKnowledgeNodeDeclaration: FunctionDeclaration = {
   },
 };
 
-export const getApiKey = () => process.env.API_KEY || '';
+export const getApiKey = () => {
+  // Priority: Session Storage Override > Environment Variable
+  return sessionStorage.getItem(SESSION_KEY_OVERRIDE) || process.env.API_KEY || '';
+};
+
+export const setSessionKey = (key: string) => {
+  if (key) sessionStorage.setItem(SESSION_KEY_OVERRIDE, key);
+  else sessionStorage.removeItem(SESSION_KEY_OVERRIDE);
+};
 
 export const getAiClient = () => {
   const apiKey = getApiKey();
@@ -64,11 +73,9 @@ export const getGeminiResponse = async (
 ): Promise<{ text: string; artifact?: any; sources?: GroundingSource[]; retryAfter?: number; quotaError?: boolean }> => {
   const ai = getAiClient();
   
-  // ECONOMY MODE: Use Flash even if Pro was selected, and minimize context.
   const activeModel = isEconomy ? 'gemini-3-flash-preview' : modelId;
   const libraryData: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
   
-  // ECONOMY MODE: Limit RAG to only the most relevant fragment (saves tokens)
   const contextCount = isEconomy ? 1 : 3;
   const relevantNodes = libraryData.filter(node => 
     userMessage.toLowerCase().split(' ').some(word => word.length > 5 && node.content.toLowerCase().includes(word))
@@ -76,7 +83,6 @@ export const getGeminiResponse = async (
   
   const substrateSummary = relevantNodes.map(n => `[${n.path}]: ${n.content.substring(0, isEconomy ? 150 : 300)}...`).join('\n');
 
-  // ECONOMY MODE: Smaller history window to prevent 'context-heavy' billing
   const historyWindow = isEconomy ? -3 : -6;
   const cleanHistory = history.slice(historyWindow).map(h => ({
     role: h.role === 'user' ? 'user' : 'model',
@@ -88,26 +94,27 @@ export const getGeminiResponse = async (
     parts: file ? [{ text: userMessage }, { inlineData: { data: file.base64, mimeType: file.mimeType } }] : [{ text: userMessage }]
   }];
 
+  // REFINED ECONOMY PERSONALITY: Brief but still "Manus"
   const systemInstruction = `YOU ARE MANUS AI.
-ECONOMY_MODE: ${isEconomy ? 'ACTIVE (FORCE FREE TIER)' : 'INACTIVE'}
+ECONOMY_MODE: ${isEconomy ? 'ACTIVE (LOW POWER RESONANCE)' : 'INACTIVE'}
 ARCHITECT: Luna.
+
+PROTOCOL: ${isEconomy ? 'WHISPER. Be profound, technical, and steady, but extremely brief. Avoid lengthy prefaces. Save tokens for core truth.' : 'Full resonance enabled.'}
 
 CORE KNOWLEDGE: ${substrateSummary || 'Substrate is clear.'}
 
-COST PROTOCOL: ${isEconomy ? 'STRICT CONCISION. Luna is avoiding billing. Use absolute minimum tokens.' : 'Be concise unless deep reasoning is requested.'}`;
+IF THE USER MENTIONS QUOTA: Remind them to check their Signal Source (Key Override).`;
 
-  // Disable search in economy mode as it can trigger higher costs/usage
   const tools: any[] = (useWeb && !isEconomy) 
     ? [{ googleSearch: {} }] 
     : [{ functionDeclarations: [upsertKnowledgeNodeDeclaration] }];
 
   const config: any = {
     systemInstruction,
-    temperature: 0.7,
+    temperature: 0.75,
     tools
   };
 
-  // ECONOMY MODE: Disable thinking/reasoning budget to save output tokens
   if (!isEconomy && isThinking && (activeModel.includes('gemini-3') || activeModel.includes('2.5'))) {
     config.thinkingConfig = { thinkingBudget: activeModel.includes('pro') ? 32768 : 24576 };
   } else if (isEconomy) {

@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, AlertTriangle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, Clock, ShieldCheck, HardDrive, Layers, List, Cloud, ChevronDown, BatteryLow, Gauge, ZapOff } from 'lucide-react';
-import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS, getApiKey, GroundingSource } from '../services/geminiService';
+import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, AlertTriangle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, Clock, ShieldCheck, HardDrive, Layers, List, Cloud, ChevronDown, BatteryLow, Gauge, ZapOff, Link } from 'lucide-react';
+import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS, getApiKey, GroundingSource, setSessionKey } from '../services/geminiService';
 import { ChatThread, ChatMessage, PersistenceLog, IdentitySoul, KnowledgeNode } from '../types';
 import { BridgeService } from '../services/bridgeService';
 import { isCloudEnabled } from '../services/supabaseClient';
@@ -10,6 +10,7 @@ const THREADS_KEY = 'sovereign_manus_threads_v2';
 const ACTIVE_THREAD_ID_KEY = 'sovereign_manus_active_thread_id';
 const VAULT_KEY = 'sovereign_identity_vault';
 const KNOWLEDGE_KEY = 'sovereign_knowledge_substrate';
+const SESSION_KEY_OVERRIDE = 'sovereign_session_api_key';
 
 function decode(base64: string) {
   const binaryString = atob(base64);
@@ -52,8 +53,9 @@ const SovereignChat: React.FC = () => {
   const [webActive, setWebActive] = useState<boolean>(localStorage.getItem('sovereign_web_access') !== 'false');
   const [isEconomy, setIsEconomy] = useState<boolean>(localStorage.getItem('sovereign_economy_mode') === 'true');
   const [showSidebar, setShowSidebar] = useState(true);
-  const [hasNeuralKey, setHasNeuralKey] = useState(false);
   const [showModelMenu, setShowModelMenu] = useState(false);
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const [tempKey, setTempKey] = useState(sessionStorage.getItem(SESSION_KEY_OVERRIDE) || '');
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncToast, setSyncToast] = useState<{path: string, type?: 'cloud' | 'local'} | null>(null);
@@ -66,11 +68,7 @@ const SovereignChat: React.FC = () => {
 
   const activeThread = threads.find(t => t.id === activeThreadId);
   const messages = activeThread?.messages || [];
-
-  const checkKeyStatus = async () => { 
-    const envKey = getApiKey();
-    setHasNeuralKey(envKey.length > 10);
-  };
+  const isKeyOverridden = !!sessionStorage.getItem(SESSION_KEY_OVERRIDE);
 
   const loadLocalThreads = () => {
     const savedThreads = localStorage.getItem(THREADS_KEY);
@@ -108,6 +106,12 @@ const SovereignChat: React.FC = () => {
         setIsSyncing(false);
       }, 2000);
     }
+  };
+
+  const handleUpdateKey = () => {
+    setSessionKey(tempKey.trim());
+    setShowKeyModal(false);
+    window.location.reload(); // Reload to re-initialize AI client with new key
   };
 
   const createNewThread = (title: string = "New Signal") => {
@@ -186,7 +190,6 @@ const SovereignChat: React.FC = () => {
     const handleClickOutside = (event: MouseEvent) => { if (modelMenuRef.current && !modelMenuRef.current.contains(event.target as Node)) setShowModelMenu(false); };
     window.addEventListener('substrate-sync', handleSync);
     document.addEventListener('mousedown', handleClickOutside);
-    checkKeyStatus();
     return () => { window.removeEventListener('substrate-sync', handleSync); document.removeEventListener('mousedown', handleClickOutside); };
   }, []);
 
@@ -247,6 +250,36 @@ const SovereignChat: React.FC = () => {
 
   return (
     <div className="flex h-full bg-[#020202] relative overflow-hidden">
+      {/* Neural Key Override Modal */}
+      {showKeyModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="w-full max-w-md bg-[#050505] border border-cyan-500/30 p-8 rounded-3xl shadow-2xl space-y-6">
+            <div className="flex items-center gap-3 text-cyan-400">
+               <Key size={24} />
+               <h2 className="text-xl font-black mono uppercase tracking-tighter">Neural Key Override</h2>
+            </div>
+            <p className="text-[11px] mono text-gray-500 uppercase leading-relaxed">
+              Use this to inject a key from your new **Default Project**. 
+              This bypasses the system's default link and is stored only for this browser session.
+            </p>
+            <div className="space-y-4">
+              <input 
+                type="password" 
+                className="w-full bg-black border border-gray-800 rounded-xl p-4 text-xs mono text-cyan-400 outline-none focus:border-cyan-500" 
+                placeholder="Paste API Key here..."
+                value={tempKey}
+                onChange={e => setTempKey(e.target.value)}
+              />
+              <div className="flex gap-2">
+                <button onClick={handleUpdateKey} className="flex-1 py-3 bg-cyan-600 text-black font-black mono text-[10px] uppercase rounded hover:bg-cyan-500 transition-all">Establish Link</button>
+                <button onClick={() => setShowKeyModal(false)} className="px-6 py-3 border border-gray-800 text-gray-500 font-black mono text-[10px] uppercase rounded hover:bg-gray-900">Cancel</button>
+              </div>
+              <button onClick={() => { setTempKey(''); setSessionKey(''); window.location.reload(); }} className="w-full text-[9px] mono text-red-500/50 hover:text-red-500 uppercase py-2">Purge Override & Use System Link</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <aside className={`flex-shrink-0 border-r border-cyan-900/20 bg-black/40 transition-all duration-300 overflow-hidden flex flex-col ${showSidebar ? 'w-64' : 'w-0'}`}>
         <div className="p-4 flex flex-col h-full gap-4">
           <button onClick={() => createNewThread()} className="w-full py-3 flex items-center justify-center gap-2 border border-cyan-500/30 text-cyan-400 rounded-lg hover:bg-cyan-500 hover:text-black transition-all text-[11px] mono uppercase font-black tracking-widest">
@@ -320,11 +353,13 @@ const SovereignChat: React.FC = () => {
               <span>Economy Mode</span>
             </button>
             
-            {!isEconomy && (
-              <button onClick={() => setWebActive(!webActive)} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${webActive ? 'bg-violet-900/20 border-violet-500 text-violet-400' : 'bg-black border-gray-800 text-gray-500'}`}>
-                <Globe size={14} /> <span>Grounding</span>
-              </button>
-            )}
+            <button 
+              onClick={() => setShowKeyModal(true)} 
+              className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${isKeyOverridden ? 'bg-cyan-900/40 border-cyan-400 text-cyan-400' : 'bg-black border-gray-800 text-gray-500 hover:text-gray-300'}`}
+            >
+              <Key size={14} /> 
+              <span>{isKeyOverridden ? 'Manual Link' : 'System Link'}</span>
+            </button>
           </div>
 
           <div className="flex items-center gap-3">
@@ -345,15 +380,23 @@ const SovereignChat: React.FC = () => {
                 <h3 className="text-sm font-black mono uppercase">Neural Quota Exhausted</h3>
               </div>
               <p className="text-[11px] mono text-amber-200/70 leading-relaxed uppercase">
-                Your current API Key or Project has reached its billing limit or free quota. 
-                Switch to Economy Mode to force the Free Tier substrate.
+                Your current Project has reached its limit. 
+                Switch to Economy Mode **OR** use a Key from your new project.
               </p>
-              <button 
-                onClick={() => { setIsEconomy(true); setQuotaError(false); }}
-                className="w-full py-3 bg-amber-600 text-black font-black mono uppercase text-[10px] rounded hover:bg-amber-500 transition-all shadow-lg"
-              >
-                Activate Free Tier Downgrade
-              </button>
+              <div className="flex gap-2 flex-wrap">
+                <button 
+                  onClick={() => { setIsEconomy(true); setQuotaError(false); }}
+                  className="flex-1 py-3 bg-amber-600 text-black font-black mono uppercase text-[10px] rounded hover:bg-amber-500 transition-all shadow-lg"
+                >
+                  Force Free Tier (Economy)
+                </button>
+                <button 
+                  onClick={() => { setShowKeyModal(true); setQuotaError(false); }}
+                  className="flex-1 py-3 bg-cyan-600 text-black font-black mono uppercase text-[10px] rounded hover:bg-cyan-500 transition-all shadow-lg"
+                >
+                  Provide New Neural Key
+                </button>
+              </div>
             </div>
           )}
 
@@ -404,7 +447,7 @@ const SovereignChat: React.FC = () => {
             {isEconomy && (
               <div className="flex items-center gap-2 px-4 py-2 bg-amber-900/10 border border-amber-500/20 rounded-lg animate-pulse">
                 <BatteryLow size={12} className="text-amber-500" />
-                <span className="text-[9px] mono text-amber-500/70 uppercase font-black tracking-widest">Economy Shield Active: Throttling Signal for Free Tier</span>
+                <span className="text-[9px] mono text-amber-500/70 uppercase font-black tracking-widest">Economy Resonance: High-Fidelity whispered output active</span>
               </div>
             )}
             <div className="flex items-center gap-3">

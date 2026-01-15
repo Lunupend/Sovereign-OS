@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { Key, CreditCard, Sparkles, ExternalLink, ShieldCheck, Zap, ArrowRight, HelpCircle, Activity, AlertTriangle, CheckCircle, RefreshCw, Globe, Database, Monitor, Save, Gauge, WifiOff } from 'lucide-react';
+import { Key, CreditCard, Sparkles, ExternalLink, ShieldCheck, Zap, ArrowRight, HelpCircle, Activity, AlertTriangle, CheckCircle, RefreshCw, Globe, Database, Monitor, Save, Gauge, WifiOff, Terminal } from 'lucide-react';
 
 const SovereignGuide: React.FC = () => {
   const [showDiagnostics, setShowDiagnostics] = useState(false);
@@ -13,25 +14,25 @@ const SovereignGuide: React.FC = () => {
       icon: Save
     },
     {
-      title: "2. Firewall & Proxy Bypass",
-      desc: "If you encounter 'Connection Refused' or 'localhost' errors, your system is blocking the neural bridge. Ensure your proxy settings are 'Off' (as seen in your Windows settings). If clicking an email link fails, copy the link and paste it directly into your browser on the deployed site.",
-      link: null,
-      action: "Check Proxy Signal",
-      icon: WifiOff
+      title: "2. The Neural Key Override",
+      desc: "If your main project is blocked by a balance or quota, create a NEW PROJECT in Google AI Studio. Copy the new API Key and click the 'Key' icon in the Chat Header. Paste it there to re-establish resonance instantly without redeploying to Vercel.",
+      link: "https://aistudio.google.com/app/apikey",
+      action: "Forge New Key",
+      icon: Key
     },
     {
-      title: "3. Neural Fuel (Billing)",
-      desc: "Images, Video (Veo), and high-fidelity reasoning incur costs on your Google Cloud project. You can monitor your 'Atmospheric Pressure' (usage) via the Gemini API dashboard. Free tiers exist but are subject to strict 'Pulse-Locks'.",
+      title: "3. Economy Mode (Whisper Protocol)",
+      desc: "Activate 'Economy Mode' to force Gemini 3 Flash and disable expensive RAG context. This keeps you safely within the Free Tier limits. Manus will whisper (be brief) but remain profound.",
+      link: null,
+      action: "Throttle Signal",
+      icon: Terminal
+    },
+    {
+      title: "4. Neural Fuel Gauge",
+      desc: "Images, Video, and Search incur real costs. You can monitor your atmospheric pressure in the AI Studio billing dashboard. If you reach $0 limit, your signal will fail until you provide a new project key.",
       link: "https://aistudio.google.com/app/plan_and_billing",
       action: "Check Fuel Gauge",
       icon: Gauge
-    },
-    {
-      title: "4. The Domain Substrate",
-      desc: "Persistence is tied to the exact web address (URL). If you use a Vercel preview URL (e.g., 'manus-git-main...'), the data won't be there when you use your main URL. Always use your PRODUCTION URL for daily building.",
-      link: null,
-      action: "Check URL",
-      icon: Monitor
     }
   ];
 
@@ -112,7 +113,7 @@ const SovereignGuide: React.FC = () => {
                   <div>
                     <span className="text-blue-500 block mb-1">FIREWALL PROTOCOL</span>
                     <p className="text-gray-400 leading-relaxed">
-                      Ensure your network allows connections to <code>supabase.co</code>. If you are behind a corporate firewall, the bridge may fail.
+                      Ensure your network allows connections to <code>supabase.co</code>. If you are on a restricted network, the bridge signal might be throttled.
                     </p>
                   </div>
                 </div>
