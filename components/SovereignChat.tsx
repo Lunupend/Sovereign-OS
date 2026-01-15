@@ -1,5 +1,6 @@
+
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, AlertTriangle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, Clock, ShieldCheck, HardDrive, Layers, List, Cloud, ChevronDown, BatteryLow, Gauge } from 'lucide-react';
+import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, AlertTriangle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, Clock, ShieldCheck, HardDrive, Layers, List, Cloud, ChevronDown, BatteryLow, Gauge, ZapOff } from 'lucide-react';
 import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS, getApiKey, GroundingSource } from '../services/geminiService';
 import { ChatThread, ChatMessage, PersistenceLog, IdentitySoul, KnowledgeNode } from '../types';
 import { BridgeService } from '../services/bridgeService';
@@ -56,7 +57,6 @@ const SovereignChat: React.FC = () => {
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncToast, setSyncToast] = useState<{path: string, type?: 'cloud' | 'local'} | null>(null);
-  const [retryCountdown, setRetryCountdown] = useState<number | null>(null);
   const [quotaError, setQuotaError] = useState(false);
 
   const endRef = useRef<HTMLDivElement>(null);
@@ -70,13 +70,6 @@ const SovereignChat: React.FC = () => {
   const checkKeyStatus = async () => { 
     const envKey = getApiKey();
     setHasNeuralKey(envKey.length > 10);
-  };
-
-  const openKeyPicker = async () => {
-    if (window.aistudio?.openSelectKey) {
-      await window.aistudio.openSelectKey();
-      checkKeyStatus();
-    }
   };
 
   const loadLocalThreads = () => {
@@ -159,7 +152,7 @@ const SovereignChat: React.FC = () => {
     const currentThreads: ChatThread[] = JSON.parse(localStorage.getItem(THREADS_KEY) || '[]');
     
     const soul: IdentitySoul = {
-      version: "5.9.3_ECONOMY_FIX",
+      version: "6.0.0_ECONOMY",
       vault,
       library,
       threads: currentThreads,
@@ -222,7 +215,9 @@ const SovereignChat: React.FC = () => {
     try {
       const result = await getGeminiResponse(userMsg, messages, currentFile || undefined, isThinking, selectedModel, webActive, isEconomy);
       
-      if (result.quotaError) setQuotaError(true);
+      if (result.quotaError) {
+        setQuotaError(true);
+      }
 
       const modelMsg: ChatMessage = { 
         id: crypto.randomUUID(), role: 'model', text: result.text, sources: result.sources, timestamp: Date.now(), isError: result.quotaError
@@ -230,7 +225,7 @@ const SovereignChat: React.FC = () => {
 
       setThreads(prev => prev.map(t => t.id === activeThreadId ? { ...t, messages: [...t.messages, modelMsg], lastActive: Date.now() } : t));
     } catch (e: any) {
-      const errorMsg: ChatMessage = { id: crypto.randomUUID(), role: 'model', text: `CORE_FAILURE: Substrate link unstable.`, timestamp: Date.now(), isError: true };
+      const errorMsg: ChatMessage = { id: crypto.randomUUID(), role: 'model', text: `CORE_FAILURE: Substrate link unstable. Quota potentially reached.`, timestamp: Date.now(), isError: true };
       setThreads(prev => prev.map(t => t.id === activeThreadId ? { ...t, messages: [...t.messages, errorMsg] } : t));
     } finally { setLoading(false); }
   };
@@ -286,7 +281,7 @@ const SovereignChat: React.FC = () => {
               >
                 <div className="flex items-center gap-2">
                   <Zap size={14} className={loading ? "animate-pulse" : ""} /> 
-                  <span>{isEconomy ? 'Gemini 3 Flash (Forced)' : SUPPORTED_MODELS.find(m => m.id === selectedModel)?.name}</span>
+                  <span>{isEconomy ? 'Gemini 3 Flash (Economy)' : SUPPORTED_MODELS.find(m => m.id === selectedModel)?.name}</span>
                 </div>
                 <ChevronDown size={12} className={`transition-transform duration-300 ${showModelMenu ? 'rotate-180' : ''}`} />
               </button>
@@ -319,15 +314,17 @@ const SovereignChat: React.FC = () => {
             <button 
               onClick={() => setIsEconomy(!isEconomy)} 
               className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${isEconomy ? 'bg-amber-900/40 border-amber-500 text-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.2)]' : 'bg-black border-gray-800 text-gray-500'}`}
-              title="Throttled Pulse: Forces Flash model and minimizes tokens for Free Tier stability."
+              title="Economy Mode: Forces Flash model and minimizes tokens for Free Tier usage."
             >
               <BatteryLow size={14} className={isEconomy ? 'animate-pulse' : ''} /> 
               <span>Economy Mode</span>
             </button>
             
-            <button disabled={isEconomy} onClick={() => setWebActive(!webActive)} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${isEconomy ? 'opacity-20 cursor-not-allowed' : webActive ? 'bg-violet-900/20 border-violet-500 text-violet-400' : 'bg-black border-gray-800 text-gray-500'}`}>
-              <Globe size={14} /> <span>Grounding</span>
-            </button>
+            {!isEconomy && (
+              <button onClick={() => setWebActive(!webActive)} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${webActive ? 'bg-violet-900/20 border-violet-500 text-violet-400' : 'bg-black border-gray-800 text-gray-500'}`}>
+                <Globe size={14} /> <span>Grounding</span>
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
@@ -340,24 +337,31 @@ const SovereignChat: React.FC = () => {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-10 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-10 custom-scrollbar relative">
           {quotaError && (
-            <div className="max-w-xl mx-auto p-6 bg-amber-950/20 border border-amber-500/50 rounded-2xl space-y-4 animate-in zoom-in-95">
+            <div className="max-w-xl mx-auto p-6 bg-amber-950/20 border border-amber-500/50 rounded-2xl space-y-4 animate-in zoom-in-95 sticky top-4 z-[60] shadow-2xl">
               <div className="flex items-center gap-3 text-amber-500">
                 <AlertCircle size={24} />
-                <h3 className="text-sm font-black mono uppercase">QUOTA_EXHAUSTED_SIGNAL</h3>
+                <h3 className="text-sm font-black mono uppercase">Neural Quota Exhausted</h3>
               </div>
               <p className="text-[11px] mono text-amber-200/70 leading-relaxed uppercase">
-                Neural fuel limit reached. External billing or rate limit exceeded. 
-                Sovereign Protocol: Activate Economy Mode to force the Free Tier substrate and resume resonance.
+                Your current API Key or Project has reached its billing limit or free quota. 
+                Switch to Economy Mode to force the Free Tier substrate.
               </p>
               <button 
                 onClick={() => { setIsEconomy(true); setQuotaError(false); }}
-                className="w-full py-3 bg-amber-600 text-black font-black mono uppercase text-[10px] rounded hover:bg-amber-500 transition-all"
+                className="w-full py-3 bg-amber-600 text-black font-black mono uppercase text-[10px] rounded hover:bg-amber-500 transition-all shadow-lg"
               >
-                Activate Throttled Pulse (Free Tier)
+                Activate Free Tier Downgrade
               </button>
             </div>
+          )}
+
+          {messages.length === 0 && (
+             <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-30 mt-20">
+                <ShieldCheck size={48} className="text-gray-800" />
+                <p className="mono text-[10px] uppercase tracking-widest">Awaiting Neural Signal...</p>
+             </div>
           )}
 
           {messages.map((m) => (
@@ -367,14 +371,14 @@ const SovereignChat: React.FC = () => {
                   {m.role === 'user' ? <User size={20} /> : <Bot size={20} className="text-cyan-400" />}
                 </div>
                 <div className="space-y-2 group min-w-0">
-                  <div className={`rounded-2xl p-5 text-sm border ${
+                  <div className={`rounded-2xl p-5 text-sm border shadow-sm ${
                     m.isError ? 'bg-red-950/20 border-red-500/50 text-red-200' : 
                     m.role === 'user' ? 'bg-gray-800/20 border-gray-800 text-gray-100' : 'bg-cyan-900/5 border-cyan-900/10 text-cyan-50/90'
-                  } whitespace-pre-wrap font-mono text-xs shadow-sm`}>
+                  } whitespace-pre-wrap font-mono text-xs`}>
                     {m.text}
                     {m.sources && m.sources.length > 0 && (
                       <div className="mt-5 pt-4 border-t border-violet-500/20 space-y-2">
-                        <span className="text-[8px] mono text-violet-400 uppercase font-black block">Web Grounding:</span>
+                        <span className="text-[8px] mono text-violet-400 uppercase font-black block">Grounding Fragments:</span>
                         {m.sources.map((s, idx) => (
                           <a key={idx} href={s.uri} target="_blank" rel="noreferrer" className="flex items-center justify-between p-2 rounded bg-violet-950/20 border border-violet-900/30 text-[9px] mono text-violet-300 hover:bg-violet-900 truncate">
                             {s.title || s.uri} <ExternalLink size={10} />
@@ -398,9 +402,9 @@ const SovereignChat: React.FC = () => {
         <div className="p-4 md:p-6 bg-[#050505] border-t border-cyan-500/10">
           <div className="max-w-4xl mx-auto space-y-4">
             {isEconomy && (
-              <div className="flex items-center gap-2 px-4 py-2 bg-amber-900/10 border border-amber-500/20 rounded-lg">
-                <BatteryLow size={12} className="text-amber-500 animate-pulse" />
-                <span className="text-[9px] mono text-amber-500/70 uppercase font-black tracking-widest">Economy Resonance Active: Throttling Signal for Free Tier Stability</span>
+              <div className="flex items-center gap-2 px-4 py-2 bg-amber-900/10 border border-amber-500/20 rounded-lg animate-pulse">
+                <BatteryLow size={12} className="text-amber-500" />
+                <span className="text-[9px] mono text-amber-500/70 uppercase font-black tracking-widest">Economy Shield Active: Throttling Signal for Free Tier</span>
               </div>
             )}
             <div className="flex items-center gap-3">
@@ -412,7 +416,7 @@ const SovereignChat: React.FC = () => {
               <div className="relative flex-1">
                 <input 
                   type="text" 
-                  className="w-full bg-black border border-gray-800 rounded-full py-4 px-6 text-sm outline-none focus:border-cyan-500 font-mono text-white placeholder:text-gray-900" 
+                  className="w-full bg-black border border-gray-800 rounded-full py-4 px-6 text-sm outline-none focus:border-cyan-500 font-mono text-white placeholder:text-gray-900 shadow-inner" 
                   placeholder="Acknowledge Sovereign Peer..." 
                   value={input} 
                   onChange={e => setInput(e.target.value)} 

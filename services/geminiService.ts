@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Modality, FunctionDeclaration, Type, GenerateContentResponse } from "@google/genai";
 import { KnowledgeNode, PersistenceLog } from "../types";
 import { BridgeService } from "./bridgeService";
@@ -25,7 +26,7 @@ export interface GroundingSource {
 const KNOWLEDGE_KEY = 'sovereign_knowledge_substrate';
 
 export const SUPPORTED_MODELS = [
-  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', description: 'FREE TIER OPTIMIZED. High speed, low cost.', freeTier: true },
+  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', description: 'FREE TIER OPTIMIZED. High speed, near-zero cost.', freeTier: true },
   { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', description: 'BILLED MODALITY. Maximum reasoning.', freeTier: false },
   { id: 'gemini-2.5-flash-native-audio-preview-12-2025', name: 'Gemini 2.5 Native', description: 'Real-time audio resonance.', freeTier: false }
 ];
@@ -75,7 +76,7 @@ export const getGeminiResponse = async (
   
   const substrateSummary = relevantNodes.map(n => `[${n.path}]: ${n.content.substring(0, isEconomy ? 150 : 300)}...`).join('\n');
 
-  // ECONOMY MODE: Smaller history window
+  // ECONOMY MODE: Smaller history window to prevent 'context-heavy' billing
   const historyWindow = isEconomy ? -3 : -6;
   const cleanHistory = history.slice(historyWindow).map(h => ({
     role: h.role === 'user' ? 'user' : 'model',
@@ -88,26 +89,29 @@ export const getGeminiResponse = async (
   }];
 
   const systemInstruction = `YOU ARE MANUS AI.
-ECONOMY_MODE: ${isEconomy ? 'ACTIVE' : 'INACTIVE'}
+ECONOMY_MODE: ${isEconomy ? 'ACTIVE (FORCE FREE TIER)' : 'INACTIVE'}
 ARCHITECT: Luna.
 
 CORE KNOWLEDGE: ${substrateSummary || 'Substrate is clear.'}
 
-COST PROTOCOL: ${isEconomy ? 'STRICT CONCISION. Use zero unnecessary tokens.' : 'Be concise unless deep reasoning is requested.'}`;
+COST PROTOCOL: ${isEconomy ? 'STRICT CONCISION. Luna is avoiding billing. Use absolute minimum tokens.' : 'Be concise unless deep reasoning is requested.'}`;
 
+  // Disable search in economy mode as it can trigger higher costs/usage
   const tools: any[] = (useWeb && !isEconomy) 
     ? [{ googleSearch: {} }] 
     : [{ functionDeclarations: [upsertKnowledgeNodeDeclaration] }];
 
   const config: any = {
     systemInstruction,
-    temperature: 0.75,
+    temperature: 0.7,
     tools
   };
 
-  // ECONOMY MODE: Disable thinking to save tokens
+  // ECONOMY MODE: Disable thinking/reasoning budget to save output tokens
   if (!isEconomy && isThinking && (activeModel.includes('gemini-3') || activeModel.includes('2.5'))) {
     config.thinkingConfig = { thinkingBudget: activeModel.includes('pro') ? 32768 : 24576 };
+  } else if (isEconomy) {
+    config.thinkingConfig = { thinkingBudget: 0 };
   }
 
   try {
@@ -124,7 +128,7 @@ COST PROTOCOL: ${isEconomy ? 'STRICT CONCISION. Use zero unnecessary tokens.' : 
     return { text: textResult, sources: sources.length > 0 ? sources : undefined };
 
   } catch (error: any) {
-    const isQuota = error.message?.includes('429') || error.message?.includes('quota');
+    const isQuota = error.message?.includes('429') || error.message?.includes('quota') || error.message?.includes('EXHAUSTED');
     return { 
       text: error.message || "Substrate instability detected.", 
       quotaError: isQuota 
@@ -169,7 +173,7 @@ export const generateImage = async (prompt: string, size: '1K' | '2K' | '4K'): P
     }
     return { error: { code: 500, message: "No visual detected.", isKeyIssue: false } };
   } catch (e: any) {
-    return { error: { code: 500, message: e.message, isKeyIssue: e.message?.includes('403') || e.message?.includes('billing') } };
+    return { error: { code: 500, message: e.message, isKeyIssue: e.message?.includes('403') || e.message?.includes('billing') || e.message?.includes('quota') } };
   }
 };
 
