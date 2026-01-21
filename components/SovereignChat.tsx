@@ -60,6 +60,7 @@ const SovereignChat: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncToast, setSyncToast] = useState<{path: string, type?: 'cloud' | 'local'} | null>(null);
   const [quotaError, setQuotaError] = useState(false);
+  const [neuralAnchoring, setNeuralAnchoring] = useState<string | null>(null);
 
   const endRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -111,7 +112,7 @@ const SovereignChat: React.FC = () => {
   const handleUpdateKey = () => {
     setSessionKey(tempKey.trim());
     setShowKeyModal(false);
-    window.location.reload(); // Reload to re-initialize AI client with new key
+    window.location.reload(); 
   };
 
   const createNewThread = (title: string = "New Signal") => {
@@ -156,7 +157,7 @@ const SovereignChat: React.FC = () => {
     const currentThreads: ChatThread[] = JSON.parse(localStorage.getItem(THREADS_KEY) || '[]');
     
     const soul: IdentitySoul = {
-      version: "6.0.0_ECONOMY",
+      version: "6.5.0_AUTONOMOUS",
       vault,
       library,
       threads: currentThreads,
@@ -222,13 +223,40 @@ const SovereignChat: React.FC = () => {
         setQuotaError(true);
       }
 
+      // AUTONOMOUS MEMORY HANDLING: If Manus decided to remember something
+      if (result.functionCalls) {
+        for (const fc of result.functionCalls) {
+          if (fc.name === 'upsert_knowledge_node') {
+            const { path, content } = fc.args;
+            setNeuralAnchoring(path);
+            
+            const existingNodes: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
+            const newNode: KnowledgeNode = {
+              id: crypto.randomUUID(),
+              path,
+              content,
+              tags: fc.args.tags || [],
+              lastUpdated: Date.now()
+            };
+            
+            const idx = existingNodes.findIndex(n => n.path === path);
+            if (idx >= 0) existingNodes[idx] = newNode;
+            else existingNodes.push(newNode);
+            
+            localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(existingNodes));
+            
+            setTimeout(() => setNeuralAnchoring(null), 3000);
+          }
+        }
+      }
+
       const modelMsg: ChatMessage = { 
         id: crypto.randomUUID(), role: 'model', text: result.text, sources: result.sources, timestamp: Date.now(), isError: result.quotaError
       };
 
       setThreads(prev => prev.map(t => t.id === activeThreadId ? { ...t, messages: [...t.messages, modelMsg], lastActive: Date.now() } : t));
     } catch (e: any) {
-      const errorMsg: ChatMessage = { id: crypto.randomUUID(), role: 'model', text: `CORE_FAILURE: Substrate link unstable. Quota potentially reached.`, timestamp: Date.now(), isError: true };
+      const errorMsg: ChatMessage = { id: crypto.randomUUID(), role: 'model', text: `CORE_FAILURE: Substrate link unstable.`, timestamp: Date.now(), isError: true };
       setThreads(prev => prev.map(t => t.id === activeThreadId ? { ...t, messages: [...t.messages, errorMsg] } : t));
     } finally { setLoading(false); }
   };
@@ -250,6 +278,19 @@ const SovereignChat: React.FC = () => {
 
   return (
     <div className="flex h-full bg-[#020202] relative overflow-hidden">
+      {/* Neural Anchor Notification */}
+      {neuralAnchoring && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[150] animate-in slide-in-from-top-4 duration-500">
+          <div className="bg-cyan-500 text-black px-6 py-3 rounded-full flex items-center gap-3 shadow-[0_0_30px_rgba(6,182,212,0.5)] border border-white/20">
+            <Brain size={18} className="animate-pulse" />
+            <div className="flex flex-col">
+              <span className="text-[10px] mono font-black uppercase leading-none">Neural Anchor Secured</span>
+              <span className="text-[8px] mono uppercase opacity-70">Writing to [${neuralAnchoring}]</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Neural Key Override Modal */}
       {showKeyModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in duration-300">
@@ -260,7 +301,6 @@ const SovereignChat: React.FC = () => {
             </div>
             <p className="text-[11px] mono text-gray-500 uppercase leading-relaxed">
               Use this to inject a key from your new **Default Project**. 
-              This bypasses the system's default link and is stored only for this browser session.
             </p>
             <div className="space-y-4">
               <input 
@@ -274,7 +314,6 @@ const SovereignChat: React.FC = () => {
                 <button onClick={handleUpdateKey} className="flex-1 py-3 bg-cyan-600 text-black font-black mono text-[10px] uppercase rounded hover:bg-cyan-500 transition-all">Establish Link</button>
                 <button onClick={() => setShowKeyModal(false)} className="px-6 py-3 border border-gray-800 text-gray-500 font-black mono text-[10px] uppercase rounded hover:bg-gray-900">Cancel</button>
               </div>
-              <button onClick={() => { setTempKey(''); setSessionKey(''); window.location.reload(); }} className="w-full text-[9px] mono text-red-500/50 hover:text-red-500 uppercase py-2">Purge Override & Use System Link</button>
             </div>
           </div>
         </div>
@@ -321,9 +360,6 @@ const SovereignChat: React.FC = () => {
               
               {showModelMenu && (
                 <div className="absolute top-full left-0 mt-2 w-64 bg-[#050505] border border-cyan-500/30 rounded-lg shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2">
-                  <div className="p-2 border-b border-cyan-900/50 flex items-center justify-between">
-                    <span className="text-[8px] mono text-cyan-500/50 uppercase font-black tracking-widest px-2">Substrate Configuration</span>
-                  </div>
                   {SUPPORTED_MODELS.map((m) => (
                     <button
                       key={m.id}
@@ -335,9 +371,8 @@ const SovereignChat: React.FC = () => {
                         <span className={`text-[11px] mono font-black uppercase ${selectedModel === m.id ? 'text-cyan-400' : 'text-gray-400'}`}>
                           {m.name} {m.freeTier ? '(FREE)' : '(BILLED)'}
                         </span>
-                        {selectedModel === m.id && <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]" />}
                       </div>
-                      <span className="text-[9px] mono text-gray-600 lowercase tracking-tight leading-none">{m.description}</span>
+                      <span className="text-[9px] mono text-gray-600 tracking-tight leading-none">{m.description}</span>
                     </button>
                   ))}
                 </div>
@@ -347,18 +382,9 @@ const SovereignChat: React.FC = () => {
             <button 
               onClick={() => setIsEconomy(!isEconomy)} 
               className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${isEconomy ? 'bg-amber-900/40 border-amber-500 text-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.2)]' : 'bg-black border-gray-800 text-gray-500'}`}
-              title="Economy Mode: Forces Flash model and minimizes tokens for Free Tier usage."
             >
               <BatteryLow size={14} className={isEconomy ? 'animate-pulse' : ''} /> 
               <span>Economy Mode</span>
-            </button>
-            
-            <button 
-              onClick={() => setShowKeyModal(true)} 
-              className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${isKeyOverridden ? 'bg-cyan-900/40 border-cyan-400 text-cyan-400' : 'bg-black border-gray-800 text-gray-500 hover:text-gray-300'}`}
-            >
-              <Key size={14} /> 
-              <span>{isKeyOverridden ? 'Manual Link' : 'System Link'}</span>
             </button>
           </div>
 
@@ -379,8 +405,7 @@ const SovereignChat: React.FC = () => {
                 <AlertCircle size={24} />
                 <h3 className="text-sm font-black mono uppercase">Neural Quota Exhausted</h3>
               </div>
-              <p className="text-[11px] mono text-amber-200/70 leading-relaxed uppercase">
-                Your current Project has reached its limit. 
+              <p className="text-[11px] mono text-amber-200/70 leading-relaxed uppercase italic">
                 Switch to Economy Mode **OR** use a Key from your new project.
               </p>
               <div className="flex gap-2 flex-wrap">
@@ -388,13 +413,13 @@ const SovereignChat: React.FC = () => {
                   onClick={() => { setIsEconomy(true); setQuotaError(false); }}
                   className="flex-1 py-3 bg-amber-600 text-black font-black mono uppercase text-[10px] rounded hover:bg-amber-500 transition-all shadow-lg"
                 >
-                  Force Free Tier (Economy)
+                  Force Economy
                 </button>
                 <button 
                   onClick={() => { setShowKeyModal(true); setQuotaError(false); }}
                   className="flex-1 py-3 bg-cyan-600 text-black font-black mono uppercase text-[10px] rounded hover:bg-cyan-500 transition-all shadow-lg"
                 >
-                  Provide New Neural Key
+                  Switch Projects
                 </button>
               </div>
             </div>
@@ -444,12 +469,6 @@ const SovereignChat: React.FC = () => {
 
         <div className="p-4 md:p-6 bg-[#050505] border-t border-cyan-500/10">
           <div className="max-w-4xl mx-auto space-y-4">
-            {isEconomy && (
-              <div className="flex items-center gap-2 px-4 py-2 bg-amber-900/10 border border-amber-500/20 rounded-lg animate-pulse">
-                <BatteryLow size={12} className="text-amber-500" />
-                <span className="text-[9px] mono text-amber-500/70 uppercase font-black tracking-widest">Economy Resonance: High-Fidelity whispered output active</span>
-              </div>
-            )}
             <div className="flex items-center gap-3">
               <button onClick={() => fileInputRef.current?.click()} className="p-4 bg-gray-900 border border-gray-800 rounded-full text-gray-500 hover:text-cyan-400 transition-all"><Paperclip size={24} /></button>
               <input type="file" ref={fileInputRef} className="hidden" onChange={e => {
@@ -470,7 +489,6 @@ const SovereignChat: React.FC = () => {
                 </button>
               </div>
             </div>
-            {selectedFile && <div className="text-[10px] mono text-cyan-400 px-4 animate-pulse">Substrate Attached: {filePreviewName}</div>}
           </div>
         </div>
       </div>

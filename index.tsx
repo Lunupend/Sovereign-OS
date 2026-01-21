@@ -1,5 +1,4 @@
-
-import React, { ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import { Download, AlertTriangle } from 'lucide-react';
@@ -16,15 +15,15 @@ interface State {
  * Standard Error Boundary to catch substrate crashes and provide 
  * emergency data recovery options.
  */
-// Fix: Use React.Component with explicit <Props, State> generics 
-// to ensure TypeScript correctly identifies inherited properties 'this.props' and 'this.state'.
-class ErrorBoundary extends React.Component<Props, State> {
-  // Fix: Explicitly declare state to help TypeScript's structural typing recognize it as a member of the class.
+// Fix: Extending Component<Props, State> directly ensures that 'this.props' and 'this.state' 
+// are correctly typed and recognized as members of the class.
+class ErrorBoundary extends Component<Props, State> {
+  // Fix: Explicitly declare the state property to ensure structural typing compatibility.
   public state: State = {
     hasError: false
   };
 
-  // Fix: The constructor must call super(props) to ensure the component is correctly bootstrapped.
+  // Fix: The constructor must pass props to the superclass to initialize the Component correctly.
   constructor(props: Props) {
     super(props);
   }
@@ -54,7 +53,7 @@ class ErrorBoundary extends React.Component<Props, State> {
   };
 
   public render() {
-    // Fix: Accessing 'this.state' is now safe as ErrorBoundary correctly extends React.Component<Props, State>.
+    // Fix: Accessing 'this.state.hasError' is valid as it is defined in the State interface.
     if (this.state.hasError) {
       return (
         <div className="h-full w-full bg-[#050005] flex items-center justify-center p-10 font-mono text-cyan-400">
@@ -93,8 +92,8 @@ class ErrorBoundary extends React.Component<Props, State> {
       );
     }
     
-    // Fix: Accessing 'this.props' is now safe as the children property is correctly inherited from React.Component<Props, State>.
-    return this.props.children;
+    // Fix: Using type assertion to ensure children is returned as a valid ReactNode and handles the case where it might be undefined.
+    return (this.props.children || null) as ReactNode;
   }
 }
 
