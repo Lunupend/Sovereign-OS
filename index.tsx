@@ -1,3 +1,4 @@
+
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
@@ -15,19 +16,15 @@ interface State {
  * Standard Error Boundary to catch substrate crashes and provide 
  * emergency data recovery options.
  */
-// Fix: Extending Component<Props, State> directly ensures that 'this.props' and 'this.state' 
-// are correctly typed and recognized as members of the class.
-class ErrorBoundary extends Component<Props, State> {
+// Fix: Explicitly extending React.Component to ensure that 'this.props' is correctly recognized by the TypeScript compiler as a member inherited from the base class.
+class ErrorBoundary extends React.Component<Props, State> {
   // Fix: Explicitly declare the state property to ensure structural typing compatibility.
   public state: State = {
     hasError: false
   };
 
-  // Fix: The constructor must pass props to the superclass to initialize the Component correctly.
-  constructor(props: Props) {
-    super(props);
-  }
-
+  // Fix: Removed the explicit constructor as it was redundant and could occasionally interfere with generic type resolution for props in certain TypeScript environments.
+  
   public static getDerivedStateFromError(_: Error): State {
     return { hasError: true };
   }
@@ -53,7 +50,7 @@ class ErrorBoundary extends Component<Props, State> {
   };
 
   public render() {
-    // Fix: Accessing 'this.state.hasError' is valid as it is defined in the State interface.
+    // Fix: 'this.state.hasError' is now reliably typed via the generic State interface.
     if (this.state.hasError) {
       return (
         <div className="h-full w-full bg-[#050005] flex items-center justify-center p-10 font-mono text-cyan-400">
@@ -92,8 +89,8 @@ class ErrorBoundary extends Component<Props, State> {
       );
     }
     
-    // Fix: Using type assertion to ensure children is returned as a valid ReactNode and handles the case where it might be undefined.
-    return (this.props.children || null) as ReactNode;
+    // Fix: Accessing this.props.children is now valid as the class correctly extends React.Component with the Props generic.
+    return this.props.children || null;
   }
 }
 

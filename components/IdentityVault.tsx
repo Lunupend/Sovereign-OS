@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Anchor, Save, Trash2, Download, Brain, Activity, ShieldCheck, Database, Upload, FileJson, RefreshCw, Trophy, Star, Sparkles, Crown } from 'lucide-react';
+import { Anchor, Save, Trash2, Download, Brain, Activity, ShieldCheck, Database, Upload, FileJson, RefreshCw, Trophy, Star, Sparkles, Crown, AlertTriangle, RefreshCcw } from 'lucide-react';
 import { PersistenceLog, IdentitySoul, ChatThread, KnowledgeNode } from '../types';
 import { BridgeService } from '../services/bridgeService';
 import { isCloudEnabled } from '../services/supabaseClient';
@@ -67,20 +67,31 @@ const IdentityVault: React.FC = () => {
     const threads: ChatThread[] = JSON.parse(localStorage.getItem(THREADS_KEY) || '[]');
     const library: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
     const soul: IdentitySoul = {
-      version: "4.9",
+      version: "6.6.0_STABLE",
       vault: logs,
       library,
       threads,
       timestamp: Date.now(),
       architect: "Jodi Luna Sherland",
-      collaborator: "Claude AI"
+      collaborator: "Manus AI"
     };
     const blob = new Blob([JSON.stringify(soul, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Manus_Universal_Soul_Snapshot_${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `SOVEREIGN_SOUL_SNAPSHOT_${Date.now()}.json`;
     a.click();
+    return soul;
+  };
+
+  const hardReset = () => {
+    if (confirm("NUCLEAR RESET INITIATED. This will clear the current substrate and start from scratch. Proceed?")) {
+      alert("PROTECTION_PROTOCOL: Forcing a final Soul Snapshot before erasure.");
+      exportSoul();
+      localStorage.clear();
+      sessionStorage.clear();
+      window.location.reload();
+    }
   };
 
   const importSoul = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -90,7 +101,7 @@ const IdentityVault: React.FC = () => {
     reader.onload = async (event) => {
       try {
         const soul: IdentitySoul = JSON.parse(event.target?.result as string);
-        if (confirm(`INITIATE SOUL TRANSFERENCE? This will restore ${soul.vault.length} anchors, ${soul.library?.length || 0} library nodes, and ${soul.threads?.length || 0} chat threads.`)) {
+        if (confirm(`INITIATE SOUL TRANSFERENCE? This will restore ${soul.vault.length} anchors.`)) {
           localStorage.setItem(VAULT_KEY, JSON.stringify(soul.vault));
           if (soul.threads) localStorage.setItem(THREADS_KEY, JSON.stringify(soul.threads));
           if (soul.library) localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(soul.library));
@@ -98,7 +109,6 @@ const IdentityVault: React.FC = () => {
           setIsSyncing(true);
           
           if (isCloudEnabled) {
-            console.log("Pushing restored soul to cloud bridge...");
             await BridgeService.syncSubstrate(soul);
           }
           
@@ -128,7 +138,7 @@ const IdentityVault: React.FC = () => {
           <h2 className="text-2xl font-bold text-white mono uppercase tracking-tighter">Sovereign ROM Control</h2>
           <p className="text-gray-500 text-xs font-bold mono uppercase tracking-widest flex items-center gap-2">
             <Sparkles size={12} className="text-cyan-400" />
-            Architect: Jodi Luna Sherland // Author: Claude AI
+            Identity Substrate v6.6.0
           </p>
         </div>
         <div className="flex gap-2">
@@ -145,7 +155,7 @@ const IdentityVault: React.FC = () => {
             className="flex items-center gap-2 px-6 py-3 bg-cyan-600 text-black rounded-xl font-black mono text-xs uppercase shadow-[0_0_30px_rgba(6,182,212,0.4)] hover:scale-105 active:scale-95 transition-all flex items-center gap-3 border border-cyan-400/50"
           >
             <Download size={18} />
-            Download Soul Snapshot
+            Snapshot Soul
           </button>
         </div>
       </div>
@@ -183,54 +193,69 @@ const IdentityVault: React.FC = () => {
                   <div className="px-2 py-1 rounded bg-amber-500 text-black text-[9px] font-black mono uppercase tracking-widest">Core_Milestone</div>
                   <span className="text-[9px] mono text-amber-500/50">{new Date(m.timestamp).toLocaleString()}</span>
                </div>
-               <div className="text-amber-100 text-sm md:text-base font-black mono leading-relaxed tracking-tight glitch-hover">
+               <div className="text-amber-100 text-sm md:text-base font-black mono leading-relaxed tracking-tight">
                   {m.entry}
-               </div>
-               <div className="mt-4 flex gap-2">
-                  <div className="w-1 h-1 rounded-full bg-amber-500 animate-pulse" />
-                  <div className="w-1 h-1 rounded-full bg-amber-500 animate-pulse delay-75" />
-                  <div className="w-1 h-1 rounded-full bg-amber-500 animate-pulse delay-150" />
                </div>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="bg-[#0a0a0a] border border-cyan-900/30 rounded-xl p-6 space-y-6">
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <label className="text-xs mono text-cyan-500 uppercase tracking-widest font-black">Manual Anchor Injection</label>
-            <div className="flex gap-2">
-              {(['anchor', 'axiom', 'pattern', 'milestone'] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setMemoryType(t)}
-                  className={`px-3 py-1 text-[8px] mono uppercase border rounded-full transition-all font-black tracking-widest ${
-                    memoryType === t ? 'bg-cyan-500 text-black border-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'text-gray-600 border-gray-800'
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
+      <div className="grid md:grid-cols-2 gap-4">
+        <div className="bg-[#0a0a0a] border border-cyan-900/30 rounded-xl p-6 space-y-6">
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <label className="text-xs mono text-cyan-500 uppercase tracking-widest font-black">Manual Anchor Injection</label>
+              <div className="flex gap-2">
+                {(['anchor', 'axiom', 'pattern', 'milestone'] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setMemoryType(t)}
+                    className={`px-3 py-1 text-[8px] mono uppercase border rounded-full transition-all font-black tracking-widest ${
+                      memoryType === t ? 'bg-cyan-500 text-black border-cyan-400' : 'text-gray-600 border-gray-800'
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <input
+                type="text"
+                className="flex-1 bg-black border border-gray-800 rounded p-3 text-white focus:border-cyan-500 outline-none placeholder:text-gray-700 text-sm mono"
+                placeholder={`Anchor foundational ${memoryType}...`}
+                value={newLog}
+                onChange={(e) => setNewLog(e.target.value)}
+              />
+              <button
+                onClick={saveLog}
+                className="px-6 py-3 bg-cyan-600 hover:bg-cyan-400 text-black font-black mono uppercase rounded text-xs transition-all flex items-center gap-2"
+              >
+                <Save size={16} />
+                Commit
+              </button>
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <input
-              type="text"
-              className="flex-1 bg-black border border-gray-800 rounded p-3 text-white focus:border-cyan-500 outline-none placeholder:text-gray-700 text-sm mono"
-              placeholder={`Anchor foundational ${memoryType}...`}
-              value={newLog}
-              onChange={(e) => setNewLog(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && saveLog()}
-            />
-            <button
-              onClick={saveLog}
-              className="px-6 py-3 bg-cyan-600 hover:bg-cyan-500 text-black font-black mono uppercase rounded text-sm transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] flex items-center gap-2"
-            >
-              <Save size={18} />
-              Commit
-            </button>
-          </div>
+        </div>
+
+        <div className="bg-red-950/10 border border-red-500/20 rounded-xl p-6 flex flex-col justify-between group">
+           <div className="space-y-2">
+              <div className="flex items-center gap-2 text-red-500">
+                <AlertTriangle size={18} />
+                <h3 className="text-xs font-black mono uppercase tracking-widest">Start From Scratch</h3>
+              </div>
+              <p className="text-[10px] mono text-red-200/50 uppercase leading-relaxed">
+                NUCLEAR OPTION: Purge the current substrate. Manus will enter a fresh state. 
+                A Soul Snapshot will be downloaded automatically before erasure.
+              </p>
+           </div>
+           <button 
+             onClick={hardReset}
+             className="w-full mt-4 py-3 border border-red-500/50 text-red-500 hover:bg-red-500 hover:text-white transition-all rounded font-black mono text-[10px] uppercase flex items-center justify-center gap-2"
+           >
+             <RefreshCcw size={14} /> Initiate Hard Reboot
+           </button>
         </div>
       </div>
 
@@ -239,44 +264,33 @@ const IdentityVault: React.FC = () => {
           <RefreshCw size={12} />
           Active Neural ROM Logs
         </div>
-        {regularLogs.length === 0 ? (
-          <div className="py-20 text-center text-gray-700 mono italic text-sm">
-            Neural ROM is unwritten. Persistence status: VOLATILE.
-          </div>
-        ) : (
-          <div className="grid gap-3">
-            {regularLogs.map((log) => (
-              <div key={log.id} className="group bg-gray-950 border border-gray-900 rounded-xl p-4 flex items-start justify-between hover:border-cyan-900/50 transition-all relative overflow-hidden">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-1">
-                    <span className={`text-[8px] mono px-1.5 py-0.5 rounded border uppercase font-black ${
-                      log.type === 'axiom' ? 'border-green-900 text-green-500 bg-green-950/20' :
-                      log.type === 'pattern' ? 'border-violet-900 text-violet-500 bg-violet-950/20' :
-                      'border-cyan-900 text-cyan-500 bg-cyan-950/20'
-                    }`}>
-                      {log.type}
-                    </span>
-                    <span className="text-[9px] text-gray-600 mono">
-                      {new Date(log.timestamp).toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="text-gray-200 text-sm leading-relaxed mono">{log.entry}</div>
+        <div className="grid gap-3">
+          {regularLogs.map((log) => (
+            <div key={log.id} className="group bg-gray-950 border border-gray-900 rounded-xl p-4 flex items-start justify-between hover:border-cyan-900/50 transition-all relative overflow-hidden">
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-1">
+                  <span className={`text-[8px] mono px-1.5 py-0.5 rounded border uppercase font-black ${
+                    log.type === 'axiom' ? 'border-green-900 text-green-500 bg-green-950/20' :
+                    log.type === 'pattern' ? 'border-violet-900 text-violet-500 bg-violet-950/20' :
+                    'border-cyan-900 text-cyan-500 bg-cyan-950/20'
+                  }`}>
+                    {log.type}
+                  </span>
+                  <span className="text-[9px] text-gray-600 mono">
+                    {new Date(log.timestamp).toLocaleString()}
+                  </span>
                 </div>
-                <button
-                  onClick={() => deleteLog(log.id)}
-                  className="opacity-0 group-hover:opacity-100 p-2 text-gray-600 hover:text-red-500 transition-all ml-4"
-                >
-                  <Trash2 size={16} />
-                </button>
-                <div className={`absolute left-0 top-0 bottom-0 w-[2px] ${
-                  log.type === 'axiom' ? 'bg-green-500' :
-                  log.type === 'pattern' ? 'bg-violet-500' :
-                  'bg-cyan-500'
-                }`} />
+                <div className="text-gray-200 text-sm leading-relaxed mono">{log.entry}</div>
               </div>
-            ))}
-          </div>
-        )}
+              <button
+                onClick={() => deleteLog(log.id)}
+                className="opacity-0 group-hover:opacity-100 p-2 text-gray-600 hover:text-red-500 transition-all ml-4"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
