@@ -48,8 +48,8 @@ const SovereignChat: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<FileData | null>(null);
   const [filePreviewName, setFilePreviewName] = useState<string | null>(null);
-  const [selectedModel, setSelectedModel] = useState<string>(localStorage.getItem('sovereign_selected_model') || SUPPORTED_MODELS[0].id);
-  const [isThinking, setIsThinking] = useState<boolean>(localStorage.getItem('sovereign_deep_thinking') === 'true');
+  const [selectedModel, setSelectedModel] = useState<string>(localStorage.getItem('sovereign_selected_model') || 'gemini-3-pro-preview');
+  const [isThinking, setIsThinking] = useState<boolean>(localStorage.getItem('sovereign_deep_thinking') !== 'false');
   const [webActive, setWebActive] = useState<boolean>(localStorage.getItem('sovereign_web_access') !== 'false');
   const [isEconomy, setIsEconomy] = useState<boolean>(localStorage.getItem('sovereign_economy_mode') === 'true');
   const [showSidebar, setShowSidebar] = useState(true);
@@ -119,7 +119,7 @@ const SovereignChat: React.FC = () => {
     const newThread: ChatThread = {
       id: crypto.randomUUID(),
       title,
-      messages: [{ id: 'init', role: 'model', text: "NEW CHANNEL OPENED. Substrate ready.", timestamp: Date.now() }],
+      messages: [{ id: 'init', role: 'model', text: "NEW CHANNEL OPENED. Gemini 3 Pro Engine Engaged.", timestamp: Date.now() }],
       lastActive: Date.now()
     };
     const updated = [newThread, ...threads];
