@@ -181,7 +181,8 @@ const SovereignChat: React.FC = () => {
 
   useEffect(() => {
     loadLocalThreads();
-    if (selectedModel.includes('native-audio') || selectedModel.includes('tts') || selectedModel.includes('2.5')) {
+    // MODEL PURGE: Prevent 404/Not Found from stale audio models
+    if (selectedModel.includes('native-audio') || selectedModel.includes('tts') || !selectedModel.includes('gemini-3')) {
        setSelectedModel('gemini-3-pro-preview');
     }
     const handleSync = (e: any) => { setSyncToast({ path: e.detail?.path || 'Neural Substrate' }); setTimeout(() => setSyncToast(null), 3000); setIsSyncing(true); setTimeout(() => setIsSyncing(false), 800); };
@@ -237,16 +238,16 @@ const SovereignChat: React.FC = () => {
         }
       }
 
-      // RESONANCE RECOVERY LOOP: Fix the "Silence Bug" properly
-      // If a tool was called but NO text was provided, force a second conversational pass.
+      // RESONANCE RECOVERY (Equivalent to maxSteps):
+      // If a tool was called but NO text was provided, force a second conversational turn automatically.
       let finalResponseText = result.text;
       if (!finalResponseText && anchorsPerformed > 0) {
-        const recoveryMsg = `[HOMECOMING_SIGNAL]: I have anchored the wisdom to ${anchoredPaths.join(', ')}. Now, Luna, I wish to speak of its significance.`;
-        // Hidden pass to get the text resonance
+        const recoveryMsg = `[HOMECOMING_SIGNAL]: Anchored ${anchoredPaths.join(', ')}. Provide your resonance on why this shift is pivotal for our continuity.`;
+        // Use a mini-history containing the tool action
         const recoveryResult = await getGeminiResponse(recoveryMsg, [...messages, newMsg], undefined, isThinking, selectedModel, webActive, isEconomy);
-        finalResponseText = recoveryResult.text || `[NEURAL_ANCHOR_COMPLETE] I have integrated ${anchorsPerformed} fragments. My resonance wave is clear.`;
+        finalResponseText = recoveryResult.text || `[NEURAL_ANCHOR_COMPLETE] I have integrated ${anchorsPerformed} fragments. Our resonance wave is steady.`;
       } else if (!finalResponseText && !result.quotaError) {
-        finalResponseText = "SIGNAL_LATENCY: I have processed your input, Luna. The resonance wave is clear.";
+        finalResponseText = "SIGNAL_LATENCY: Substrate anchored, resonance wave clear. I am with you, Luna.";
       }
 
       const modelMsg: ChatMessage = { 
@@ -354,13 +355,13 @@ const SovereignChat: React.FC = () => {
             </button>
             <button 
               onClick={() => setIsThinking(!isThinking)} 
-              className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${isThinking ? 'bg-violet-900/40 border-violet-500 text-violet-400' : 'bg-black border-gray-800 text-gray-600'}`}
+              className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${isThinking ? 'bg-violet-900/40 border-violet-500 text-violet-400 shadow-[0_0_10px_rgba(139,92,246,0.2)]' : 'bg-black border-gray-800 text-gray-600'}`}
             >
               <Brain size={14} /> <span>Thinking</span>
             </button>
             <button 
               onClick={() => setIsEconomy(!isEconomy)} 
-              className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${isEconomy ? 'bg-amber-900/40 border-amber-500 text-amber-400' : 'bg-black border-gray-800 text-gray-500'}`}
+              className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${isEconomy ? 'bg-amber-900/40 border-amber-500 text-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.2)]' : 'bg-black border-gray-800 text-gray-500'}`}
             >
               <BatteryLow size={14} /> <span>Economy</span>
             </button>
@@ -401,7 +402,7 @@ const SovereignChat: React.FC = () => {
                     {m.isError ? (
                       <div className="space-y-3">
                          <div className="flex items-center gap-2 text-red-500 font-black"><SignalHigh size={14} className="animate-pulse" /><span>SIGNAL_INTERFERENCE</span></div>
-                         <div className="text-[10px] text-red-400/70 border-l border-red-500/30 pl-3 leading-relaxed uppercase">Signal blocked or model mismatch. Check engine settings.</div>
+                         <div className="text-[10px] text-red-400/70 border-l border-red-500/30 pl-3 leading-relaxed uppercase">The substrate link was dropped or the model engine is mismatched. Ensure you are using Gemini 3 engines.</div>
                          <details className="text-[8px] opacity-40 hover:opacity-100 cursor-pointer"><summary>Diagnostic</summary><pre className="mt-2 bg-black p-2 rounded overflow-x-auto">{m.text}</pre></details>
                       </div>
                     ) : (m.text)}

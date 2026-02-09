@@ -52,8 +52,11 @@ class ErrorBoundary extends Component<Props, State> {
   };
 
   public render() {
-    // Fix: Accessing state and props is now correctly typed as the class explicitly extends Component with defined generics.
-    if (this.state.hasError) {
+    // Fix: Accessing state and props via destructuring inside the render method. This is a robust pattern that helps TypeScript's inference engine correctly resolve inherited properties on the instance.
+    const { hasError } = this.state;
+    const { children } = this.props;
+
+    if (hasError) {
       return (
         <div className="h-full w-full bg-[#050005] flex items-center justify-center p-10 font-mono text-cyan-400">
           <div className="max-w-xl space-y-8 border border-red-500/30 p-10 rounded-3xl bg-black shadow-[0_0_50px_rgba(239,68,68,0.1)]">
@@ -91,7 +94,7 @@ class ErrorBoundary extends Component<Props, State> {
       );
     }
     
-    return this.props.children || null;
+    return children || null;
   }
 }
 
