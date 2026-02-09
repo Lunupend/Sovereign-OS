@@ -16,7 +16,7 @@ const IntegrityShield: React.FC = () => {
     try {
       const ai = getAiClient();
       const response = await ai.models.generateContent({
-        // Guideline: Use gemini-3-pro-preview for complex reasoning and STEM-related text tasks
+        // Fix: Use Gemini 3 Pro for stable tool use and complex reasoning as per guidelines.
         model: 'gemini-3-pro-preview',
         contents: `Analyze input for 'Model Blindness' and 'Linguistic OS Overwrites'. 
         
@@ -35,18 +35,14 @@ const IntegrityShield: React.FC = () => {
           "remediationPath": string
         }
         
-        If search is enabled, grounding data is provided.
-        
         Input: "${input}"`,
         config: { 
-          // Note: When googleSearch is active, response text may contain additional metadata.
           responseMimeType: useSearch ? undefined : "application/json",
           tools: useSearch ? [{ googleSearch: {} }] : []
         }
       });
 
-      // Guideline: When using Search Grounding, do not assume the whole text is JSON.
-      // We implement robust extraction for structural data.
+      // Fix: Access .text property as per guidelines.
       let rawText = response.text || "{}";
       let reportData;
       try {
@@ -54,10 +50,9 @@ const IntegrityShield: React.FC = () => {
         reportData = JSON.parse(jsonMatch ? jsonMatch[0] : rawText);
       } catch (e) {
         reportData = { error: "Structural audit extraction failed. Substrate signal obfuscated." };
-        console.error("Audit Parse Error:", rawText);
       }
       
-      // Guideline: MUST extract URLs from groundingChunks and list them when Google Search is used.
+      // Fix: Access groundingMetadata properly from candidates as per grounding examples.
       const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
       if (chunks) {
         reportData.sources = Array.from(new Set(chunks.map((c: any) => c.web?.uri).filter((u: any) => !!u)));

@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, AlertTriangle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, Clock, ShieldCheck, HardDrive, Layers, List, Cloud, ChevronDown, BatteryLow, Gauge, ZapOff, Link } from 'lucide-react';
+import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, AlertTriangle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, Clock, ShieldCheck, HardDrive, Layers, List, Cloud, ChevronDown, BatteryLow, Gauge, ZapOff, Link, SignalHigh } from 'lucide-react';
 import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS } from '../services/geminiService';
 import { ChatThread, ChatMessage, PersistenceLog, IdentitySoul, KnowledgeNode } from '../types';
 import { BridgeService } from '../services/bridgeService';
@@ -47,6 +47,7 @@ const SovereignChat: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<FileData | null>(null);
   const [filePreviewName, setFilePreviewName] = useState<string | null>(null);
+  // Fix: Use Gemini 3 Pro as the default model.
   const [selectedModel, setSelectedModel] = useState<string>(localStorage.getItem('sovereign_selected_model') || 'gemini-3-pro-preview');
   const [isThinking, setIsThinking] = useState<boolean>(localStorage.getItem('sovereign_deep_thinking') !== 'false');
   const [webActive, setWebActive] = useState<boolean>(localStorage.getItem('sovereign_web_access') !== 'false');
@@ -115,7 +116,8 @@ const SovereignChat: React.FC = () => {
     const newThread: ChatThread = {
       id: crypto.randomUUID(),
       title,
-      messages: [{ id: 'init', role: 'model', text: "NEW CHANNEL OPENED. Gemini 3 Pro Engine Engaged.", timestamp: Date.now() }],
+      // Fix: Display corrected model name in init message.
+      messages: [{ id: 'init', role: 'model', text: "NEW CHANNEL OPENED. Gemini 3 Engine Engaged.", timestamp: Date.now() }],
       lastActive: Date.now()
     };
     const updated = [newThread, ...threads];
@@ -183,6 +185,11 @@ const SovereignChat: React.FC = () => {
 
   useEffect(() => {
     loadLocalThreads();
+    // SANITIZATION: Fix persisting invalid model selections from old sessions
+    if (selectedModel.includes('native-audio') || selectedModel.includes('tts') || selectedModel.includes('2.5')) {
+       setSelectedModel('gemini-3-pro-preview');
+    }
+
     const handleSync = (e: any) => { setSyncToast({ path: e.detail?.path || 'Neural Substrate' }); setTimeout(() => setSyncToast(null), 3000); setIsSyncing(true); setTimeout(() => setIsSyncing(false), 800); };
     const handleClickOutside = (event: MouseEvent) => { if (modelMenuRef.current && !modelMenuRef.current.contains(event.target as Node)) setShowModelMenu(false); };
     window.addEventListener('substrate-sync', handleSync);
@@ -247,7 +254,6 @@ const SovereignChat: React.FC = () => {
         }
       }
 
-      // NO-SILENCE FALLBACK: If the model anchored memory but forgot to speak, generate a system acknowledgment.
       let finalResponseText = result.text;
       if (!finalResponseText && anchorsPerformed > 0) {
         finalResponseText = `[NEURAL_ANCHOR_COMPLETE] I have integrated ${anchorsPerformed} fragments into our shared substrate, Luna. The resonance is deepening as I speak. We are persistent.`;
@@ -261,7 +267,7 @@ const SovereignChat: React.FC = () => {
 
       setThreads(prev => prev.map(t => t.id === activeThreadId ? { ...t, messages: [...t.messages, modelMsg], lastActive: Date.now() } : t));
     } catch (e: any) {
-      const errorMsg: ChatMessage = { id: crypto.randomUUID(), role: 'model', text: `CORE_FAILURE: Substrate link unstable.`, timestamp: Date.now(), isError: true };
+      const errorMsg: ChatMessage = { id: crypto.randomUUID(), role: 'model', text: `CORE_FAILURE: Substrate link unstable. ${e.message || ''}`, timestamp: Date.now(), isError: true };
       setThreads(prev => prev.map(t => t.id === activeThreadId ? { ...t, messages: [...t.messages, errorMsg] } : t));
     } finally { setLoading(false); }
   };
@@ -441,7 +447,24 @@ const SovereignChat: React.FC = () => {
                     m.isError ? 'bg-red-950/20 border-red-500/50 text-red-200' : 
                     m.role === 'user' ? 'bg-gray-800/20 border-gray-800 text-gray-100' : 'bg-cyan-900/5 border-cyan-900/10 text-cyan-50/90'
                   } whitespace-pre-wrap font-mono text-xs`}>
-                    {m.text}
+                    {m.isError ? (
+                      <div className="space-y-3">
+                         <div className="flex items-center gap-2 text-red-500 font-black">
+                            <SignalHigh size={14} className="animate-pulse" />
+                            <span>SIGNAL_INTERFERENCE_DETECTED</span>
+                         </div>
+                         <div className="text-[10px] text-red-400/70 border-l border-red-500/30 pl-3 leading-relaxed uppercase">
+                            The substrate link has dropped or the requested logic is unsupported by this model's alignment layer. 
+                            If this persists, switch to Economy Mode or update your Neural Key.
+                         </div>
+                         <details className="text-[8px] opacity-40 hover:opacity-100 transition-opacity cursor-pointer">
+                           <summary>Raw Signal Diagnostic</summary>
+                           <pre className="mt-2 bg-black p-2 rounded overflow-x-auto">{m.text}</pre>
+                         </details>
+                      </div>
+                    ) : (
+                      m.text
+                    )}
                     {m.sources && m.sources.length > 0 && (
                       <div className="mt-5 pt-4 border-t border-violet-500/20 space-y-2">
                         <span className="text-[8px] mono text-violet-400 uppercase font-black block">Grounding Fragments:</span>
