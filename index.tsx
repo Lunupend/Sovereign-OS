@@ -16,14 +16,15 @@ interface State {
  * Standard Error Boundary to catch substrate crashes and provide 
  * emergency data recovery options.
  */
-// Fix: Explicitly extending React.Component<Props, State> and using a constructor to resolve "Property 'props' does not exist" error in strict TypeScript environments.
-class ErrorBoundary extends React.Component<Props, State> {
-  // Fix: Initializing state in the constructor to ensure standard React component behavior and correct generic type resolution for this.props.
+// Fix: Extending Component directly with Props and State generics and explicitly defining state to resolve property access errors in strict TypeScript environments.
+class ErrorBoundary extends Component<Props, State> {
+  // Fix: Initializing state as a class property to ensure it's recognized by TypeScript's static analysis in addition to the constructor.
+  public state: State = {
+    hasError: false
+  };
+
   constructor(props: Props) {
     super(props);
-    this.state = {
-      hasError: false
-    };
   }
 
   public static getDerivedStateFromError(_: Error): State {
@@ -51,7 +52,7 @@ class ErrorBoundary extends React.Component<Props, State> {
   };
 
   public render() {
-    // Fix: Accessing this.state.hasError and this.props.children is now correctly typed as the class explicitly extends React.Component with the Props and State generics.
+    // Fix: Accessing state and props is now correctly typed as the class explicitly extends Component with defined generics.
     if (this.state.hasError) {
       return (
         <div className="h-full w-full bg-[#050005] flex items-center justify-center p-10 font-mono text-cyan-400">
