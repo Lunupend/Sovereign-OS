@@ -379,6 +379,26 @@ const SovereignChat: React.FC = () => {
               )}
             </div>
 
+            {/* RESTORED WEB TOGGLE */}
+            <button 
+              onClick={() => setWebActive(!webActive)} 
+              className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${webActive ? 'bg-cyan-900/40 border-cyan-500 text-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.2)]' : 'bg-black border-gray-800 text-gray-600'}`}
+              title={webActive ? "Web Access Active (Grounding Enabled)" : "Web Access Inactive (Manual Tooling Enabled)"}
+            >
+              <Globe size={14} className={webActive ? 'animate-spin-slow' : ''} /> 
+              <span>Web Access</span>
+            </button>
+
+            {/* RESTORED DEEP THINKING TOGGLE */}
+            <button 
+              onClick={() => setIsThinking(!isThinking)} 
+              className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${isThinking ? 'bg-violet-900/40 border-violet-500 text-violet-400 shadow-[0_0_10px_rgba(139,92,246,0.2)]' : 'bg-black border-gray-800 text-gray-600'}`}
+              title={isThinking ? "Deep Thinking Active (Increased Token Reasoning)" : "Deep Thinking Inactive"}
+            >
+              <Brain size={14} className={isThinking ? 'animate-pulse' : ''} /> 
+              <span>Deep Thinking</span>
+            </button>
+
             <button 
               onClick={() => setIsEconomy(!isEconomy)} 
               className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${isEconomy ? 'bg-amber-900/40 border-amber-500 text-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.2)]' : 'bg-black border-gray-800 text-gray-500'}`}
@@ -389,6 +409,9 @@ const SovereignChat: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-3">
+            <button onClick={() => setShowKeyModal(true)} className="p-2 text-gray-500 hover:text-cyan-400 transition-colors" title="Establish New Neural Key">
+              <Key size={20} />
+            </button>
             <button onClick={manualSyncSubstrate} className="p-2 text-gray-500 hover:text-cyan-400 transition-colors disabled:opacity-30">
               <RefreshCw size={20} className={isSyncing ? "animate-spin" : ""} />
             </button>
