@@ -16,9 +16,9 @@ interface State {
  * Standard Error Boundary to catch substrate crashes and provide 
  * emergency data recovery options.
  */
-// Fix: Extending Component directly with Props and State generics and explicitly defining state to resolve property access errors in strict TypeScript environments.
+// Fix: Extending Component directly with Props and State generics to resolve property access errors in strict TypeScript environments.
 class ErrorBoundary extends Component<Props, State> {
-  // Fix: Initializing state as a class property to ensure it's recognized by TypeScript's static analysis in addition to the constructor.
+  // Fix: Initializing state as a class property to ensure it's recognized by TypeScript's static analysis.
   public state: State = {
     hasError: false
   };
@@ -52,7 +52,7 @@ class ErrorBoundary extends Component<Props, State> {
   };
 
   public render() {
-    // Fix: Accessing state and props via destructuring inside the render method. This is a robust pattern that helps TypeScript's inference engine correctly resolve inherited properties on the instance.
+    // Fix: Accessing state and props directly from the class instance. Inheritance from Component<Props, State> ensures these properties exist.
     const { hasError } = this.state;
     const { children } = this.props;
 

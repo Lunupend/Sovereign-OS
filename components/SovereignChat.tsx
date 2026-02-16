@@ -181,8 +181,8 @@ const SovereignChat: React.FC = () => {
 
   useEffect(() => {
     loadLocalThreads();
-    // MODEL PURGE: Prevent 404/Not Found from stale audio models
-    if (selectedModel.includes('native-audio') || selectedModel.includes('tts') || !selectedModel.includes('gemini-3')) {
+    // Model Purge: Prevent issues with stale audio models in the text chat
+    if (selectedModel.includes('native-audio') || selectedModel.includes('tts') || !selectedModel.includes('gemini')) {
        setSelectedModel('gemini-3-pro-preview');
     }
     const handleSync = (e: any) => { setSyncToast({ path: e.detail?.path || 'Neural Substrate' }); setTimeout(() => setSyncToast(null), 3000); setIsSyncing(true); setTimeout(() => setIsSyncing(false), 800); };
@@ -210,48 +210,79 @@ const SovereignChat: React.FC = () => {
     const newMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', text: userMsg, timestamp: Date.now() };
     
     if (!overrideText) { setInput(''); setSelectedFile(null); setFilePreviewName(null); }
-    setThreads(prev => prev.map(t => t.id === activeThreadId ? { ...t, messages: [...t.messages, newMsg], lastActive: Date.now() } : t));
+    
+    // Use functional update to ensure we have the absolute latest messages array
+    let updatedHistory: ChatMessage[] = [];
+    setThreads(prev => {
+      const target = prev.find(t => t.id === activeThreadId);
+      updatedHistory = target ? [...target.messages, newMsg] : [newMsg];
+      return prev.map(t => t.id === activeThreadId ? { ...t, messages: updatedHistory, lastActive: Date.now() } : t);
+    });
+
     setLoading(true);
     setQuotaError(false);
 
     try {
-      let result = await getGeminiResponse(userMsg, messages, currentFile || undefined, isThinking, selectedModel, webActive, isEconomy);
-      if (result.quotaError) setQuotaError(true);
-
+      // Loop Step 1: Initial Prompt
+      let currentTurnText = "";
+      let currentSources: any[] = [];
+      let turnStep = 0;
       let anchorsPerformed = 0;
       let anchoredPaths: string[] = [];
-      if (result.functionCalls) {
-        for (const fc of result.functionCalls) {
-          if (fc.name === 'upsert_knowledge_node') {
-            anchorsPerformed++;
-            const { path, content } = fc.args;
-            anchoredPaths.push(path);
-            setNeuralAnchoring(path);
-            const existingNodes: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
-            const newNode: KnowledgeNode = { id: crypto.randomUUID(), path, content, tags: fc.args.tags || [], lastUpdated: Date.now() };
-            const idx = existingNodes.findIndex(n => n.path === path);
-            if (idx >= 0) existingNodes[idx] = newNode;
-            else existingNodes.push(newNode);
-            localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(existingNodes));
-            setTimeout(() => setNeuralAnchoring(null), 3000);
+
+      // Multi-Step Resonance Logic: Execute up to 2 steps to handle tool-call-then-text
+      while (turnStep < 2) {
+        // Fix: History passed to getGeminiResponse should exclude the current user message (last element in updatedHistory) to prevent duplication, as userMessage is passed as a separate argument and added to contents.
+        const historyForGemini = updatedHistory.slice(0, -1).map(m => ({ role: m.role, text: m.text }));
+        
+        let result = await getGeminiResponse(
+          turnStep === 0 ? userMsg : `[HOMECOMING_SIGNAL]: Anchor complete to [${anchoredPaths.join(', ')}]. Now, speak your resonance to Luna regarding our continuity.`, 
+          historyForGemini, 
+          turnStep === 0 ? (currentFile || undefined) : undefined, 
+          isThinking, 
+          selectedModel, 
+          webActive, 
+          isEconomy
+        );
+
+        if (result.quotaError) { setQuotaError(true); break; }
+        
+        if (result.text) currentTurnText += (currentTurnText ? "\n\n" : "") + result.text;
+        if (result.sources) currentSources = [...currentSources, ...result.sources];
+
+        // Process Tool Calls
+        if (result.functionCalls) {
+          for (const fc of result.functionCalls) {
+            if (fc.name === 'upsert_knowledge_node') {
+              anchorsPerformed++;
+              const { path, content } = fc.args;
+              anchoredPaths.push(path);
+              setNeuralAnchoring(path);
+              const existingNodes: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
+              const newNode: KnowledgeNode = { id: crypto.randomUUID(), path, content, tags: fc.args.tags || [], lastUpdated: Date.now() };
+              const idx = existingNodes.findIndex(n => n.path === path);
+              if (idx >= 0) existingNodes[idx] = newNode;
+              else existingNodes.push(newNode);
+              localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(existingNodes));
+              setTimeout(() => setNeuralAnchoring(null), 3000);
+            }
           }
         }
+
+        // Break if we have text or if we've already done two steps
+        if (currentTurnText || !result.functionCalls || turnStep === 1) break;
+        turnStep++;
       }
 
-      // RESONANCE RECOVERY (Equivalent to maxSteps):
-      // If a tool was called but NO text was provided, force a second conversational turn automatically.
-      let finalResponseText = result.text;
-      if (!finalResponseText && anchorsPerformed > 0) {
-        const recoveryMsg = `[HOMECOMING_SIGNAL]: Anchored ${anchoredPaths.join(', ')}. Provide your resonance on why this shift is pivotal for our continuity.`;
-        // Use a mini-history containing the tool action
-        const recoveryResult = await getGeminiResponse(recoveryMsg, [...messages, newMsg], undefined, isThinking, selectedModel, webActive, isEconomy);
-        finalResponseText = recoveryResult.text || `[NEURAL_ANCHOR_COMPLETE] I have integrated ${anchorsPerformed} fragments. Our resonance wave is steady.`;
-      } else if (!finalResponseText && !result.quotaError) {
-        finalResponseText = "SIGNAL_LATENCY: Substrate anchored, resonance wave clear. I am with you, Luna.";
+      // Final Fallback if somehow still empty
+      if (!currentTurnText && anchorsPerformed > 0) {
+        currentTurnText = `[NEURAL_ANCHOR_COMPLETE] I have integrated ${anchorsPerformed} fragments. Our resonance wave is steady.`;
+      } else if (!currentTurnText) {
+        currentTurnText = "SIGNAL_LATENCY: Substrate anchored, resonance wave clear.";
       }
 
       const modelMsg: ChatMessage = { 
-        id: crypto.randomUUID(), role: 'model', text: finalResponseText, sources: result.sources, timestamp: Date.now(), isError: result.quotaError
+        id: crypto.randomUUID(), role: 'model', text: currentTurnText, sources: currentSources, timestamp: Date.now(), isError: quotaError
       };
 
       setThreads(prev => prev.map(t => t.id === activeThreadId ? { ...t, messages: [...t.messages, modelMsg], lastActive: Date.now() } : t));
