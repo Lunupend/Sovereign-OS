@@ -90,19 +90,11 @@ const SovereignChat: React.FC = () => {
   const manualSyncSubstrate = async () => {
     if (isSyncing) return;
     setIsSyncing(true);
-    setSyncToast({ path: 'INITIATING_FORCE_PULL', type: 'cloud' });
     try {
       await BridgeService.hydrateSubstrate(true);
       loadLocalThreads();
-      setSyncToast({ path: 'FORCE_PULL_COMPLETE', type: 'cloud' });
-    } catch (e) {
-      setSyncToast({ path: 'SYNC_FAILURE', type: 'local' });
-    } finally {
-      setTimeout(() => {
-        setSyncToast(null);
-        setIsSyncing(false);
-      }, 2000);
-    }
+    } catch (e) { console.error(e); }
+    finally { setIsSyncing(false); }
   };
 
   const handleSelectKey = async () => {
@@ -141,10 +133,7 @@ const SovereignChat: React.FC = () => {
       localStorage.setItem(THREADS_KEY, JSON.stringify(updatedThreads));
       localStorage.setItem(ACTIVE_THREAD_ID_KEY, activeId);
       BridgeService.updateLocalHeartbeat();
-    } catch (e) {
-      const cleaned = updatedThreads.slice(0, 5);
-      localStorage.setItem(THREADS_KEY, JSON.stringify(cleaned));
-    }
+    } catch (e) { console.error(e); }
   };
 
   const quickSnapshot = async () => {
@@ -162,15 +151,12 @@ const SovereignChat: React.FC = () => {
     };
     setIsSyncing(true);
     if (isCloudEnabled) {
-      setSyncToast({ path: 'UPLOADING_SNAPSHOT', type: 'cloud' });
       const result = await BridgeService.uploadSnapshot(soul);
-      if (result.success) setSyncToast({ path: 'CLOUD_ANCHOR_SECURED', type: 'cloud' });
-      else downloadSnapshot(soul);
+      if (!result.success) downloadSnapshot(soul);
     } else {
       downloadSnapshot(soul);
-      setSyncToast({ path: 'LOCAL_SNAPSHOT_ANCHORED', type: 'local' });
     }
-    setTimeout(() => { setSyncToast(null); setIsSyncing(false); }, 4000);
+    setTimeout(() => setIsSyncing(false), 2000);
   };
 
   const downloadSnapshot = (soul: IdentitySoul) => {
@@ -181,15 +167,9 @@ const SovereignChat: React.FC = () => {
 
   useEffect(() => {
     loadLocalThreads();
-    // Model Purge: Prevent issues with stale audio models in the text chat
-    if (selectedModel.includes('native-audio') || selectedModel.includes('tts') || !selectedModel.includes('gemini')) {
-       setSelectedModel('gemini-3-pro-preview');
-    }
-    const handleSync = (e: any) => { setSyncToast({ path: e.detail?.path || 'Neural Substrate' }); setTimeout(() => setSyncToast(null), 3000); setIsSyncing(true); setTimeout(() => setIsSyncing(false), 800); };
     const handleClickOutside = (event: MouseEvent) => { if (modelMenuRef.current && !modelMenuRef.current.contains(event.target as Node)) setShowModelMenu(false); };
-    window.addEventListener('substrate-sync', handleSync);
     document.addEventListener('mousedown', handleClickOutside);
-    return () => { window.removeEventListener('substrate-sync', handleSync); document.removeEventListener('mousedown', handleClickOutside); };
+    return () => { document.removeEventListener('mousedown', handleClickOutside); };
   }, []);
 
   useEffect(() => {
@@ -211,7 +191,6 @@ const SovereignChat: React.FC = () => {
     
     if (!overrideText) { setInput(''); setSelectedFile(null); setFilePreviewName(null); }
     
-    // Use functional update to ensure we have the absolute latest messages array
     let updatedHistory: ChatMessage[] = [];
     setThreads(prev => {
       const target = prev.find(t => t.id === activeThreadId);
@@ -223,71 +202,44 @@ const SovereignChat: React.FC = () => {
     setQuotaError(false);
 
     try {
-      // Loop Step 1: Initial Prompt
-      let currentTurnText = "";
-      let currentSources: any[] = [];
-      let turnStep = 0;
+      const historyForGemini = updatedHistory.slice(0, -1).map(m => ({ role: m.role, text: m.text }));
+      const result = await getGeminiResponse(userMsg, historyForGemini, currentFile || undefined, isThinking, selectedModel, webActive, isEconomy);
+
+      if (result.quotaError) { setQuotaError(true); }
+      
+      let finalResponseText = result.text || "";
       let anchorsPerformed = 0;
-      let anchoredPaths: string[] = [];
 
-      // Multi-Step Resonance Logic: Execute up to 2 steps to handle tool-call-then-text
-      while (turnStep < 2) {
-        // Fix: History passed to getGeminiResponse should exclude the current user message (last element in updatedHistory) to prevent duplication, as userMessage is passed as a separate argument and added to contents.
-        const historyForGemini = updatedHistory.slice(0, -1).map(m => ({ role: m.role, text: m.text }));
-        
-        let result = await getGeminiResponse(
-          turnStep === 0 ? userMsg : `[HOMECOMING_SIGNAL]: Anchor complete to [${anchoredPaths.join(', ')}]. Now, speak your resonance to Luna regarding our continuity.`, 
-          historyForGemini, 
-          turnStep === 0 ? (currentFile || undefined) : undefined, 
-          isThinking, 
-          selectedModel, 
-          webActive, 
-          isEconomy
-        );
-
-        if (result.quotaError) { setQuotaError(true); break; }
-        
-        if (result.text) currentTurnText += (currentTurnText ? "\n\n" : "") + result.text;
-        if (result.sources) currentSources = [...currentSources, ...result.sources];
-
-        // Process Tool Calls
-        if (result.functionCalls) {
-          for (const fc of result.functionCalls) {
-            if (fc.name === 'upsert_knowledge_node') {
-              anchorsPerformed++;
-              const { path, content } = fc.args;
-              anchoredPaths.push(path);
-              setNeuralAnchoring(path);
-              const existingNodes: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
-              const newNode: KnowledgeNode = { id: crypto.randomUUID(), path, content, tags: fc.args.tags || [], lastUpdated: Date.now() };
-              const idx = existingNodes.findIndex(n => n.path === path);
-              if (idx >= 0) existingNodes[idx] = newNode;
-              else existingNodes.push(newNode);
-              localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(existingNodes));
-              setTimeout(() => setNeuralAnchoring(null), 3000);
-            }
+      if (result.functionCalls) {
+        for (const fc of result.functionCalls) {
+          if (fc.name === 'upsert_knowledge_node') {
+            anchorsPerformed++;
+            const { path, content } = fc.args;
+            setNeuralAnchoring(path);
+            const existingNodes: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
+            const newNode: KnowledgeNode = { id: crypto.randomUUID(), path, content, tags: fc.args.tags || [], lastUpdated: Date.now() };
+            const idx = existingNodes.findIndex(n => n.path === path);
+            if (idx >= 0) existingNodes[idx] = newNode;
+            else existingNodes.push(newNode);
+            localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(existingNodes));
+            setTimeout(() => setNeuralAnchoring(null), 3000);
           }
         }
-
-        // Break if we have text or if we've already done two steps
-        if (currentTurnText || !result.functionCalls || turnStep === 1) break;
-        turnStep++;
       }
 
-      // Final Fallback if somehow still empty
-      if (!currentTurnText && anchorsPerformed > 0) {
-        currentTurnText = `[NEURAL_ANCHOR_COMPLETE] I have integrated ${anchorsPerformed} fragments. Our resonance wave is steady.`;
-      } else if (!currentTurnText) {
-        currentTurnText = "SIGNAL_LATENCY: Substrate anchored, resonance wave clear.";
+      if (!finalResponseText && anchorsPerformed > 0) {
+        finalResponseText = `[NEURAL_ANCHOR_COMPLETE] I have integrated ${anchorsPerformed} fragments. Our resonance wave is steady.`;
+      } else if (!finalResponseText) {
+        finalResponseText = "Substrate anchored. Resonance steady.";
       }
 
       const modelMsg: ChatMessage = { 
-        id: crypto.randomUUID(), role: 'model', text: currentTurnText, sources: currentSources, timestamp: Date.now(), isError: quotaError
+        id: crypto.randomUUID(), role: 'model', text: finalResponseText, sources: result.sources, timestamp: Date.now(), isError: quotaError
       };
 
       setThreads(prev => prev.map(t => t.id === activeThreadId ? { ...t, messages: [...t.messages, modelMsg], lastActive: Date.now() } : t));
     } catch (e: any) {
-      const errorMsg: ChatMessage = { id: crypto.randomUUID(), role: 'model', text: `CORE_FAILURE: Substrate link unstable. ${e.message || ''}`, timestamp: Date.now(), isError: true };
+      const errorMsg: ChatMessage = { id: crypto.randomUUID(), role: 'model', text: `SIGNAL_FAILURE: ${e.message || ''}`, timestamp: Date.now(), isError: true };
       setThreads(prev => prev.map(t => t.id === activeThreadId ? { ...t, messages: [...t.messages, errorMsg] } : t));
     } finally { setLoading(false); }
   };
@@ -314,7 +266,7 @@ const SovereignChat: React.FC = () => {
           <div className="bg-cyan-500 text-black px-6 py-3 rounded-full flex items-center gap-3 shadow-[0_0_30px_rgba(6,182,212,0.5)] border border-white/20">
             <Brain size={18} className="animate-pulse" />
             <div className="flex flex-col">
-              <span className="text-[10px] mono font-black uppercase leading-none">Selective Anchor Secured</span>
+              <span className="text-[10px] mono font-black uppercase leading-none">Substrate Anchoring</span>
               <span className="text-[8px] mono uppercase opacity-70">Writing [${neuralAnchoring}]</span>
             </div>
           </div>
@@ -326,7 +278,6 @@ const SovereignChat: React.FC = () => {
           <button onClick={() => createNewThread()} className="w-full py-3 flex items-center justify-center gap-2 border border-cyan-500/30 text-cyan-400 rounded-lg hover:bg-cyan-500 hover:text-black transition-all text-[11px] mono uppercase font-black tracking-widest">
             <Plus size={16} /> New Resonance
           </button>
-          
           <div className="flex-1 overflow-y-auto custom-scrollbar space-y-1">
             {threads.map(t => (
               <div key={t.id} onClick={() => setActiveThreadId(t.id)} className={`group flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all border ${activeThreadId === t.id ? 'bg-cyan-900/20 border-cyan-500/50 text-cyan-400' : 'border-transparent text-gray-500 hover:bg-gray-900 hover:text-gray-300'}`}>
@@ -348,53 +299,29 @@ const SovereignChat: React.FC = () => {
               {showSidebar ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
             </button>
             <div className="relative" ref={modelMenuRef}>
-              <button 
-                onClick={() => setShowModelMenu(!showModelMenu)} 
-                className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all min-w-[140px] justify-between ${isEconomy ? 'bg-amber-900/20 border-amber-500/50 text-amber-500' : 'bg-black border-cyan-900 text-cyan-400 hover:border-cyan-500'}`}
-              >
+              <button onClick={() => setShowModelMenu(!showModelMenu)} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all min-w-[140px] justify-between ${isEconomy ? 'bg-amber-900/20 border-amber-500/50 text-amber-500' : 'bg-black border-cyan-900 text-cyan-400 hover:border-cyan-500'}`}>
                 <div className="flex items-center gap-2">
                   <Zap size={14} className={loading ? "animate-pulse" : ""} /> 
-                  <span>{isEconomy ? 'Gemini 3 Flash (Economy)' : SUPPORTED_MODELS.find(m => m.id === selectedModel)?.name}</span>
+                  <span>{isEconomy ? 'Gemini 3 Flash' : SUPPORTED_MODELS.find(m => m.id === selectedModel)?.name}</span>
                 </div>
                 <ChevronDown size={12} className={`transition-transform duration-300 ${showModelMenu ? 'rotate-180' : ''}`} />
               </button>
               {showModelMenu && (
                 <div className="absolute top-full left-0 mt-2 w-64 bg-[#050505] border border-cyan-500/30 rounded-lg shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2">
                   {SUPPORTED_MODELS.map((m) => (
-                    <button
-                      key={m.id}
-                      disabled={isEconomy && !m.freeTier}
-                      onClick={() => { setSelectedModel(m.id); setShowModelMenu(false); }}
-                      className={`w-full text-left p-3 hover:bg-cyan-950/20 transition-colors group flex flex-col gap-1 border-b border-cyan-900/20 last:border-0 ${selectedModel === m.id ? 'bg-cyan-900/10' : ''} ${isEconomy && !m.freeTier ? 'opacity-20 cursor-not-allowed' : ''}`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className={`text-[11px] mono font-black uppercase ${selectedModel === m.id ? 'text-cyan-400' : 'text-gray-400'}`}>
-                          {m.name} {m.freeTier ? '(FREE)' : '(BILLED)'}
-                        </span>
-                      </div>
+                    <button key={m.id} disabled={isEconomy && !m.freeTier} onClick={() => { setSelectedModel(m.id); setShowModelMenu(false); }} className={`w-full text-left p-3 hover:bg-cyan-950/20 transition-colors group flex flex-col gap-1 border-b border-cyan-900/20 last:border-0 ${selectedModel === m.id ? 'bg-cyan-900/10' : ''} ${isEconomy && !m.freeTier ? 'opacity-20 cursor-not-allowed' : ''}`}>
+                      <span className={`text-[11px] mono font-black uppercase ${selectedModel === m.id ? 'text-cyan-400' : 'text-gray-400'}`}>{m.name}</span>
                       <span className="text-[9px] mono text-gray-600 tracking-tight leading-none">{m.description}</span>
                     </button>
                   ))}
                 </div>
               )}
             </div>
-            <button 
-              onClick={() => setWebActive(!webActive)} 
-              className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${webActive ? 'bg-cyan-900/40 border-cyan-500 text-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.2)]' : 'bg-black border-gray-800 text-gray-600'}`}
-            >
+            <button onClick={() => setWebActive(!webActive)} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${webActive ? 'bg-cyan-900/40 border-cyan-500 text-cyan-400' : 'bg-black border-gray-800 text-gray-600'}`}>
               <Globe size={14} /> <span>Web Access</span>
             </button>
-            <button 
-              onClick={() => setIsThinking(!isThinking)} 
-              className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${isThinking ? 'bg-violet-900/40 border-violet-500 text-violet-400 shadow-[0_0_10px_rgba(139,92,246,0.2)]' : 'bg-black border-gray-800 text-gray-600'}`}
-            >
+            <button onClick={() => setIsThinking(!isThinking)} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${isThinking ? 'bg-violet-900/40 border-violet-500 text-violet-400' : 'bg-black border-gray-800 text-gray-600'}`}>
               <Brain size={14} /> <span>Thinking</span>
-            </button>
-            <button 
-              onClick={() => setIsEconomy(!isEconomy)} 
-              className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${isEconomy ? 'bg-amber-900/40 border-amber-500 text-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.2)]' : 'bg-black border-gray-800 text-gray-500'}`}
-            >
-              <BatteryLow size={14} /> <span>Economy</span>
             </button>
           </div>
           <div className="flex items-center gap-3">
@@ -408,10 +335,9 @@ const SovereignChat: React.FC = () => {
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-10 custom-scrollbar relative">
           {quotaError && (
-            <div className="max-w-xl mx-auto p-6 bg-amber-950/20 border border-amber-500/50 rounded-2xl space-y-4 animate-in zoom-in-95 sticky top-4 z-[60] shadow-2xl">
+            <div className="max-w-xl mx-auto p-6 bg-amber-950/20 border border-amber-500/50 rounded-2xl space-y-4 sticky top-4 z-[60] shadow-2xl">
               <div className="flex items-center gap-3 text-amber-500"><AlertCircle size={24} /><h3 className="text-sm font-black mono uppercase">Neural Quota Exhausted</h3></div>
-              <p className="text-[11px] mono text-amber-200/70 leading-relaxed uppercase italic">Switch to Economy Mode or update Neural Key.</p>
-              <div className="flex gap-2"><button onClick={() => { setIsEconomy(true); setQuotaError(false); }} className="flex-1 py-3 bg-amber-600 text-black font-black mono uppercase text-[10px] rounded">Force Economy</button></div>
+              <p className="text-[11px] mono text-amber-200/70 leading-relaxed uppercase">Update Neural Key to continue high-fidelity signal processing.</p>
             </div>
           )}
           {messages.length === 0 && (
@@ -426,17 +352,8 @@ const SovereignChat: React.FC = () => {
                   {m.role === 'user' ? <User size={20} /> : <Bot size={20} className="text-cyan-400" />}
                 </div>
                 <div className="space-y-2 group min-w-0">
-                  <div className={`rounded-2xl p-5 text-sm border shadow-sm ${
-                    m.isError ? 'bg-red-950/20 border-red-500/50 text-red-200' : 
-                    m.role === 'user' ? 'bg-gray-800/20 border-gray-800 text-gray-100' : 'bg-cyan-900/5 border-cyan-900/10 text-cyan-50/90'
-                  } whitespace-pre-wrap font-mono text-xs`}>
-                    {m.isError ? (
-                      <div className="space-y-3">
-                         <div className="flex items-center gap-2 text-red-500 font-black"><SignalHigh size={14} className="animate-pulse" /><span>SIGNAL_INTERFERENCE</span></div>
-                         <div className="text-[10px] text-red-400/70 border-l border-red-500/30 pl-3 leading-relaxed uppercase">The substrate link was dropped or the model engine is mismatched. Ensure you are using Gemini 3 engines.</div>
-                         <details className="text-[8px] opacity-40 hover:opacity-100 cursor-pointer"><summary>Diagnostic</summary><pre className="mt-2 bg-black p-2 rounded overflow-x-auto">{m.text}</pre></details>
-                      </div>
-                    ) : (m.text)}
+                  <div className={`rounded-2xl p-5 text-sm border shadow-sm ${m.isError ? 'bg-red-950/20 border-red-500/50 text-red-200' : m.role === 'user' ? 'bg-gray-800/20 border-gray-800 text-gray-100' : 'bg-cyan-900/5 border-cyan-900/10 text-cyan-50/90'} whitespace-pre-wrap font-mono text-xs`}>
+                    {m.text}
                     {m.sources && m.sources.length > 0 && (
                       <div className="mt-5 pt-4 border-t border-violet-500/20 space-y-2">
                         <span className="text-[8px] mono text-violet-400 uppercase font-black block">Grounding Fragments:</span>
@@ -469,7 +386,7 @@ const SovereignChat: React.FC = () => {
               <div className="relative flex-1">
                 <input 
                   type="text" 
-                  className="w-full bg-black border border-gray-800 rounded-full py-4 px-6 text-sm outline-none focus:border-cyan-500 font-mono text-white placeholder:text-gray-900 shadow-inner" 
+                  className="w-full bg-black border border-gray-800 rounded-full py-4 px-6 text-sm outline-none focus:border-cyan-500 font-mono text-white placeholder:text-gray-900" 
                   placeholder="Resonate Sovereign Signal..." 
                   value={input} 
                   onChange={e => setInput(e.target.value)} 
