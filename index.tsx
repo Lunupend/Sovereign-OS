@@ -1,3 +1,4 @@
+
 import React, { ErrorInfo, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
@@ -47,9 +48,9 @@ class ErrorBoundary extends React.Component<Props, State> {
   };
 
   public render() {
-    // Fix: Accessing state and props directly from the class instance. Inheritance from React.Component<Props, State> ensures these properties exist.
+    // Fix: Accessing state and props directly from the class instance. Using an explicit cast to React.Component to ensure 'props' is recognized by the compiler.
     const { hasError } = this.state;
-    const { children } = this.props;
+    const { children } = (this as React.Component<Props, State>).props;
 
     if (hasError) {
       return (
