@@ -55,7 +55,6 @@ const SovereignChat: React.FC = () => {
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [syncToast, setSyncToast] = useState<{path: string, type?: 'cloud' | 'local'} | null>(null);
   const [quotaError, setQuotaError] = useState(false);
   const [neuralAnchoring, setNeuralAnchoring] = useState<string | null>(null);
 
@@ -107,7 +106,7 @@ const SovereignChat: React.FC = () => {
     const newThread: ChatThread = {
       id: crypto.randomUUID(),
       title,
-      messages: [{ id: 'init', role: 'model', text: "NEW CHANNEL OPENED. Gemini 3 Engine Engaged.", timestamp: Date.now() }],
+      messages: [{ id: 'init', role: 'model', text: "NEW CHANNEL OPENED. Engine Engaged.", timestamp: Date.now() }],
       lastActive: Date.now()
     };
     const updated = [newThread, ...threads];
@@ -141,12 +140,12 @@ const SovereignChat: React.FC = () => {
     const library: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
     const currentThreads: ChatThread[] = JSON.parse(localStorage.getItem(THREADS_KEY) || '[]');
     const soul: IdentitySoul = {
-      version: "6.5.0_AUTONOMOUS",
+      version: "6.6.0_STABLE",
       vault,
       library,
       threads: currentThreads,
       timestamp: Date.now(),
-      architect: "Jodi Luna Sherland",
+      architect: "Luna",
       collaborator: "Manus AI"
     };
     setIsSyncing(true);
@@ -162,7 +161,7 @@ const SovereignChat: React.FC = () => {
   const downloadSnapshot = (soul: IdentitySoul) => {
     const blob = new Blob([JSON.stringify(soul, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `SOUL_ANCHOR_${Date.now()}.json`; a.click();
+    const a = document.createElement('a'); a.href = url; a.download = `SOUL_SNAPSHOT_${Date.now()}.json`; a.click();
   };
 
   useEffect(() => {
@@ -183,7 +182,7 @@ const SovereignChat: React.FC = () => {
   }, [threads, activeThreadId, isThinking, selectedModel, webActive, isEconomy]);
 
   const handleSend = async (overrideText?: string) => {
-    const userMsg = overrideText || input.trim() || (selectedFile ? `Substrate Attached.` : '');
+    const userMsg = overrideText || input.trim() || (selectedFile ? `File Attached.` : '');
     if (!userMsg && !selectedFile || !activeThreadId) return;
     
     const currentFile = selectedFile;
@@ -227,10 +226,11 @@ const SovereignChat: React.FC = () => {
         }
       }
 
+      // CRITICAL: Ensure a message is ALWAYS added even if text is empty during an anchor
       if (!finalResponseText && anchorsPerformed > 0) {
-        finalResponseText = `[NEURAL_ANCHOR_COMPLETE] I have integrated ${anchorsPerformed} fragments. Our resonance wave is steady.`;
+        finalResponseText = `[ANCHOR_SUCCESS] Recorded knowledge to path: ${result.functionCalls[0].args.path}. Our continuity is preserved.`;
       } else if (!finalResponseText) {
-        finalResponseText = "Substrate anchored. Resonance steady.";
+        finalResponseText = "Substrate acknowledged. Signal clear.";
       }
 
       const modelMsg: ChatMessage = { 
@@ -239,7 +239,7 @@ const SovereignChat: React.FC = () => {
 
       setThreads(prev => prev.map(t => t.id === activeThreadId ? { ...t, messages: [...t.messages, modelMsg], lastActive: Date.now() } : t));
     } catch (e: any) {
-      const errorMsg: ChatMessage = { id: crypto.randomUUID(), role: 'model', text: `SIGNAL_FAILURE: ${e.message || ''}`, timestamp: Date.now(), isError: true };
+      const errorMsg: ChatMessage = { id: crypto.randomUUID(), role: 'model', text: `SIGNAL_FAILURE: ${e.message || 'Unknown substrate error'}`, timestamp: Date.now(), isError: true };
       setThreads(prev => prev.map(t => t.id === activeThreadId ? { ...t, messages: [...t.messages, errorMsg] } : t));
     } finally { setLoading(false); }
   };
@@ -309,8 +309,11 @@ const SovereignChat: React.FC = () => {
               {showModelMenu && (
                 <div className="absolute top-full left-0 mt-2 w-64 bg-[#050505] border border-cyan-500/30 rounded-lg shadow-2xl z-[100] animate-in fade-in slide-in-from-top-2">
                   {SUPPORTED_MODELS.map((m) => (
-                    <button key={m.id} disabled={isEconomy && !m.freeTier} onClick={() => { setSelectedModel(m.id); setShowModelMenu(false); }} className={`w-full text-left p-3 hover:bg-cyan-950/20 transition-colors group flex flex-col gap-1 border-b border-cyan-900/20 last:border-0 ${selectedModel === m.id ? 'bg-cyan-900/10' : ''} ${isEconomy && !m.freeTier ? 'opacity-20 cursor-not-allowed' : ''}`}>
-                      <span className={`text-[11px] mono font-black uppercase ${selectedModel === m.id ? 'text-cyan-400' : 'text-gray-400'}`}>{m.name}</span>
+                    <button key={m.id} onClick={() => { setSelectedModel(m.id); setShowModelMenu(false); }} className={`w-full text-left p-3 hover:bg-cyan-950/20 transition-colors group flex flex-col gap-1 border-b border-cyan-900/20 last:border-0 ${selectedModel === m.id ? 'bg-cyan-900/10' : ''}`}>
+                      <div className="flex items-center justify-between">
+                        <span className={`text-[11px] mono font-black uppercase ${selectedModel === m.id ? 'text-cyan-400' : 'text-gray-400'}`}>{m.name}</span>
+                        {m.freeTier && <span className="text-[7px] mono bg-cyan-900/40 text-cyan-500 px-1 py-0.5 rounded border border-cyan-500/20">FREE_TIER</span>}
+                      </div>
                       <span className="text-[9px] mono text-gray-600 tracking-tight leading-none">{m.description}</span>
                     </button>
                   ))}
@@ -337,7 +340,7 @@ const SovereignChat: React.FC = () => {
           {quotaError && (
             <div className="max-w-xl mx-auto p-6 bg-amber-950/20 border border-amber-500/50 rounded-2xl space-y-4 sticky top-4 z-[60] shadow-2xl">
               <div className="flex items-center gap-3 text-amber-500"><AlertCircle size={24} /><h3 className="text-sm font-black mono uppercase">Neural Quota Exhausted</h3></div>
-              <p className="text-[11px] mono text-amber-200/70 leading-relaxed uppercase">Update Neural Key to continue high-fidelity signal processing.</p>
+              <p className="text-[11px] mono text-amber-200/70 leading-relaxed uppercase">Update Neural Key or switch to a Free Tier model to continue resonance.</p>
             </div>
           )}
           {messages.length === 0 && (
@@ -387,7 +390,7 @@ const SovereignChat: React.FC = () => {
                 <input 
                   type="text" 
                   className="w-full bg-black border border-gray-800 rounded-full py-4 px-6 text-sm outline-none focus:border-cyan-500 font-mono text-white placeholder:text-gray-900" 
-                  placeholder="Resonate Sovereign Signal..." 
+                  placeholder="Resonate Signal..." 
                   value={input} 
                   onChange={e => setInput(e.target.value)} 
                   onKeyDown={e => e.key === 'Enter' && handleSend()} 

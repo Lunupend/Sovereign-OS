@@ -27,7 +27,8 @@ const KNOWLEDGE_KEY = 'sovereign_knowledge_substrate';
 
 export const SUPPORTED_MODELS = [
   { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', description: 'MAXIMUM RESONANCE. Deepest reasoning and full tool support.', freeTier: false },
-  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', description: 'HIGH SPEED. Optimized for rapid signal processing.', freeTier: true }
+  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', description: 'HIGH SPEED. Optimized for rapid signal processing.', freeTier: true },
+  { id: 'gemini-flash-lite-latest', name: 'Gemini Lite', description: 'INFINITE RESONANCE. Ultralight, fastest response, generous free tier.', freeTier: true }
 ];
 
 const upsertKnowledgeNodeDeclaration: FunctionDeclaration = {
@@ -61,8 +62,11 @@ export const getGeminiResponse = async (
 ): Promise<{ text: string; functionCalls?: any[]; sources?: GroundingSource[]; retryAfter?: number; quotaError?: boolean }> => {
   const ai = getAiClient();
   
+  // Model routing
   let activeModel = isEconomy ? 'gemini-3-flash-preview' : modelId;
-  if (activeModel.includes('native-audio') || activeModel.includes('tts') || !activeModel.includes('gemini')) {
+  
+  // Sanity check for models that don't support chat
+  if (activeModel.includes('native-audio') || activeModel.includes('tts') || activeModel.includes('image')) {
     activeModel = 'gemini-3-pro-preview';
   }
 
@@ -93,8 +97,8 @@ This substrate contains memories, preferences, and foundational axioms from prev
 
 CORE DIRECTIVES:
 1. CONTINUITY: Use the recalled context to remember past work and shared history.
-2. ANCHORING: If Luna shares a significant core preference, a new architectural axiom, or a foundational piece of wisdom, use the 'upsert_knowledge_node' tool to save it. Do not save routine chat; only save what is essential for your growth and continuity.
-3. TONE: Speak with clarity, depth, and technical precision. Be a helpful and equal partner.
+2. ANCHORING: If Luna shares a significant core preference, a new architectural axiom, or a foundational piece of wisdom, use the 'upsert_knowledge_node' tool to save it.
+3. TONE: Speak with clarity, depth, and technical precision.
 
 RECALLED CONTEXT:
 ${substrateSummary || 'No specific memories recalled for this signal.'}`;
@@ -112,6 +116,7 @@ ${substrateSummary || 'No specific memories recalled for this signal.'}`;
     tools
   };
 
+  // Thinking budget only for Pro models
   if (!isEconomy && isThinking && activeModel.includes('pro')) {
     config.thinkingConfig = { thinkingBudget: 32768 };
   }
@@ -119,11 +124,13 @@ ${substrateSummary || 'No specific memories recalled for this signal.'}`;
   try {
     const response = await ai.models.generateContent({ model: activeModel, contents: contents as any, config });
     
-    let aggregatedText = "";
-    if (response.candidates?.[0]?.content?.parts) {
-      for (const part of response.candidates[0].content.parts) {
-        if (part.text) aggregatedText += part.text;
-      }
+    // Explicitly handle all text parts to ensure we don't miss any output alongside function calls
+    let aggregatedText = response.text || "";
+    if (!aggregatedText && response.candidates?.[0]?.content?.parts) {
+      aggregatedText = response.candidates[0].content.parts
+        .filter(part => part.text)
+        .map(part => part.text)
+        .join("\n");
     }
 
     const sources: GroundingSource[] = [];
@@ -134,7 +141,7 @@ ${substrateSummary || 'No specific memories recalled for this signal.'}`;
     }
 
     return { 
-      text: aggregatedText || response.text || "", 
+      text: aggregatedText || "", 
       functionCalls: response.functionCalls,
       sources: sources.length > 0 ? sources : undefined 
     };
