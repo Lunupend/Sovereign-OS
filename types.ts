@@ -62,3 +62,12 @@ export interface IntegrityReport {
   differentiationScore: number;
   status: 'secure' | 'compromised' | 'under_analysis';
 }
+
+declare global {
+  interface Window {
+    aistudio: {
+      hasSelectedApiKey: () => Promise<boolean>;
+      openSelectKey: () => Promise<void>;
+    };
+  }
+}

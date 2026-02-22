@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import SovereignChat from './components/SovereignChat';
+import LiveManus from './components/LiveManus';
 import IntegrityShield from './components/IntegrityShield';
 import ManifestationLab from './components/ManifestationLab';
 import SovereignGuide from './components/SovereignGuide';
@@ -80,6 +81,7 @@ const App: React.FC = () => {
 
   const renderContent = () => {
     switch (activeTab) {
+      case 'live': return <LiveManus />;
       case 'integrity': return <IntegrityShield />;
       case 'manifestation': return <ManifestationLab />;
       case 'guide': return <SovereignGuide />;

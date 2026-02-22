@@ -318,7 +318,7 @@ const SovereignChat: React.FC = () => {
       }
 
       // CRITICAL: Ensure a message is ALWAYS added even if text is empty during an anchor
-      if (!finalResponseText && anchorsPerformed > 0) {
+      if (!finalResponseText && anchorsPerformed > 0 && result.functionCalls?.[0]) {
         finalResponseText = `[ANCHOR_SUCCESS] Recorded knowledge to path: ${result.functionCalls[0].args.path}. Our continuity is preserved.`;
       } else if (!finalResponseText) {
         finalResponseText = "Substrate acknowledged. Signal clear.";
