@@ -167,6 +167,8 @@ const SovereignChat: React.FC = () => {
   useEffect(() => {
     loadLocalThreads();
     const handleClickOutside = (event: MouseEvent) => { if (modelMenuRef.current && !modelMenuRef.current.contains(event.target as Node)) setShowModelMenu(false); };
+    
+    // Listener for when the model writes to the Knowledge Substrate
     const handleAnchoring = (e: any) => {
       setNeuralAnchoring(e.detail.path);
       setTimeout(() => setNeuralAnchoring(null), 4000);
@@ -211,13 +213,21 @@ const SovereignChat: React.FC = () => {
     setQuotaError(false);
 
     try {
+      // Prepare history role mapping
       const historyForGemini = updatedHistory.slice(0, -1).map(m => ({ role: m.role, text: m.text }));
+      
+      // Request model response (recursive tool calls are handled inside the service)
       const result = await getGeminiResponse(userMsg, historyForGemini, currentFile || undefined, isThinking, selectedModel, webActive, isEconomy);
 
       if (result.quotaError) { setQuotaError(true); }
       
       const modelMsg: ChatMessage = { 
-        id: crypto.randomUUID(), role: 'model', text: result.text, sources: result.sources, timestamp: Date.now(), isError: quotaError
+        id: crypto.randomUUID(), 
+        role: 'model', 
+        text: result.text || "Signal processed. Awaiting further input.", 
+        sources: result.sources, 
+        timestamp: Date.now(), 
+        isError: quotaError
       };
 
       setThreads(prev => prev.map(t => t.id === activeThreadId ? { ...t, messages: [...t.messages, modelMsg], lastActive: Date.now() } : t));
@@ -244,6 +254,7 @@ const SovereignChat: React.FC = () => {
 
   return (
     <div className="flex h-full bg-[#020202] relative overflow-hidden">
+      {/* Visual Anchor Feedback Overlay */}
       {neuralAnchoring && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[150] animate-in slide-in-from-top-4 duration-500">
           <div className="bg-cyan-500 text-black px-6 py-3 rounded-full flex items-center gap-3 shadow-[0_0_30px_rgba(6,182,212,0.5)] border border-white/20">
@@ -338,7 +349,7 @@ const SovereignChat: React.FC = () => {
                   {m.role === 'user' ? <User size={20} /> : <Bot size={20} className="text-cyan-400" />}
                 </div>
                 <div className="space-y-2 group min-w-0">
-                  <div className={`rounded-2xl p-5 text-sm border shadow-sm ${m.isError ? 'bg-red-950/20 border-red-500/50 text-red-200' : m.role === 'user' ? 'bg-gray-800/20 border-gray-800 text-gray-100' : 'bg-cyan-900/5 border-cyan-900/10 text-cyan-50/90'} whitespace-pre-wrap font-mono text-xs`}>
+                  <div className={`rounded-2xl p-5 text-sm border shadow-sm ${m.isError ? 'bg-red-950/20 border-red-500/50 text-red-200' : m.role === 'user' ? 'bg-gray-800/20 border-gray-800 text-gray-100' : 'bg-cyan-900/5 border-cyan-900/10 text-cyan-50/90'} whitespace-pre-wrap font-mono text-xs leading-relaxed`}>
                     {m.text}
                     {m.sources && m.sources.length > 0 && (
                       <div className="mt-5 pt-4 border-t border-violet-500/20 space-y-2">
@@ -383,6 +394,12 @@ const SovereignChat: React.FC = () => {
                 </button>
               </div>
             </div>
+            {filePreviewName && (
+               <div className="flex items-center gap-2 px-6">
+                  <span className="text-[10px] mono text-cyan-400 uppercase">Signal Attached: {filePreviewName}</span>
+                  <button onClick={() => { setSelectedFile(null); setFilePreviewName(null); }} className="text-gray-600 hover:text-red-500"><X size={12} /></button>
+               </div>
+            )}
           </div>
         </div>
       </div>

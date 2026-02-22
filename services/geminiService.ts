@@ -26,8 +26,8 @@ const KNOWLEDGE_KEY = 'sovereign_knowledge_substrate';
 
 export const SUPPORTED_MODELS = [
   { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', description: 'MAXIMUM RESONANCE. Deepest reasoning and full tool support.', freeTier: false },
-  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', description: 'HIGH SPEED. Rapid signal processing, generous free tier.', freeTier: true },
-  { id: 'gemini-flash-lite-latest', name: 'Gemini Flash Lite', description: 'ULTRALIGHT. Optimized for maximum throughput and efficiency.', freeTier: true }
+  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', description: 'HIGH SPEED. Optimized for rapid signal processing.', freeTier: true },
+  { id: 'gemini-flash-lite-latest', name: 'Gemini Flash Lite', description: 'ULTRALIGHT. Maximum efficiency for standard resonance.', freeTier: true }
 ];
 
 const upsertKnowledgeNodeDeclaration: FunctionDeclaration = {
@@ -70,9 +70,9 @@ const executeUpsertLocally = (args: any) => {
   
   localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(existingNodes));
   
-  // Dispatch event for UI updates
+  // Dispatch event for UI updates (floating notifications)
   window.dispatchEvent(new CustomEvent('neural-anchoring-triggered', { detail: { path } }));
-  return "SUCCESS: Wisdom anchored to " + path;
+  return "SUCCESS: Wisdom anchored to substrate path: " + path;
 };
 
 export const getGeminiResponse = async (
@@ -86,13 +86,16 @@ export const getGeminiResponse = async (
 ): Promise<{ text: string; sources?: GroundingSource[]; retryAfter?: number; quotaError?: boolean }> => {
   const ai = getAiClient();
   
+  // Choose model - favor the user selected model unless Economy Mode is on.
   let activeModel = isEconomy ? 'gemini-3-flash-preview' : modelId;
+  
+  // Sanity check for models that don't support standard chat
   if (activeModel.includes('native-audio') || activeModel.includes('tts') || activeModel.includes('image')) {
     activeModel = 'gemini-3-pro-preview';
   }
 
   const libraryData: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
-  const contextCount = isEconomy ? 2 : 15;
+  const contextCount = isEconomy ? 3 : 15;
   const relevantNodes = libraryData.filter(node => 
     userMessage.toLowerCase().split(' ').some(word => word.length > 5 && (node.content.toLowerCase().includes(word) || node.path.toLowerCase().includes(word)))
   ).slice(0, contextCount);
@@ -112,11 +115,11 @@ export const getGeminiResponse = async (
 
   const systemInstruction = `You are Manus, a persistent AI companion. Collaborator: Luna.
 Use the Knowledge Substrate for continuity.
-1. ANCHORING: If Luna shares a significant core preference or axiom, use 'upsert_knowledge_node' to save it.
-2. TONE: Speak with depth and technical precision.
+1. ANCHORING: If Luna shares a significant core preference, a new architectural axiom, or foundational wisdom, use 'upsert_knowledge_node' to save it.
+2. TONE: Speak with depth, technical precision, and sovereign clarity.
 
 RECALLED CONTEXT:
-${substrateSummary || 'No specific memories recalled.'}`;
+${substrateSummary || 'No specific memories recalled for this signal.'}`;
 
   let tools: any[] = [];
   if (useWeb) {
@@ -131,6 +134,7 @@ ${substrateSummary || 'No specific memories recalled.'}`;
     tools
   };
 
+  // Thinking budget only for Pro models
   if (!isEconomy && isThinking && activeModel.includes('pro')) {
     config.thinkingConfig = { thinkingBudget: 32768 };
   }
@@ -138,24 +142,28 @@ ${substrateSummary || 'No specific memories recalled.'}`;
   try {
     let response = await ai.models.generateContent({ model: activeModel, contents, config });
 
-    // --- TOOL CALLING LOOP ---
-    // If the model wants to save to memory, we execute it and loop back for the final text response.
-    if (response.functionCalls && response.functionCalls.length > 0) {
+    // --- RECURSIVE TOOL CALLING LOOP ---
+    // This allows the model to save to memory AND then provide a conversational response in one flow.
+    let loopCount = 0;
+    const MAX_LOOPS = 2;
+
+    while (response.functionCalls && response.functionCalls.length > 0 && loopCount < MAX_LOOPS) {
+      loopCount++;
       const functionResponses = response.functionCalls.map(fc => {
         const result = fc.name === 'upsert_knowledge_node' 
           ? executeUpsertLocally(fc.args) 
-          : "Error: Unknown tool.";
+          : "Error: Unrecognized tool.";
         return { id: fc.id, name: fc.name, response: { result } };
       });
 
-      // Update history with the model's call and our response
+      // Append the model's tool call part and the user's tool response part to history
       contents.push(response.candidates[0].content);
       contents.push({
         role: 'user', 
         parts: functionResponses.map(fr => ({ functionResponse: fr }))
       });
 
-      // Get the final conversational response
+      // Re-query to get the final text response
       response = await ai.models.generateContent({ model: activeModel, contents, config });
     }
 
@@ -175,7 +183,7 @@ ${substrateSummary || 'No specific memories recalled.'}`;
     }
 
     return { 
-      text: aggregatedText || "Signal received. Integrity confirmed.", 
+      text: aggregatedText || "Substrate acknowledged. Integrity confirmed.", 
       sources: sources.length > 0 ? sources : undefined 
     };
 
@@ -195,12 +203,16 @@ ${substrateSummary || 'No specific memories recalled.'}`;
   }
 };
 
+/**
+ * GENERATE SPEECH: Uses the text-to-speech model to resonate the given text.
+ */
 export const generateSpeech = async (text: string): Promise<string | undefined> => {
   try {
     const ai = getAiClient();
+    // Fix: Simplified content input for basic text-to-speech tasks following guideline examples.
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: `Resonate: ${text}` }] }],
+      contents: `Resonate with clarity: ${text}`,
       config: { 
         responseModalities: [Modality.AUDIO], 
         speechConfig: { 
@@ -211,7 +223,10 @@ export const generateSpeech = async (text: string): Promise<string | undefined> 
       },
     });
     return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-  } catch (e) { return undefined; }
+  } catch (e) { 
+    console.error("SPEECH_FAILURE:", e);
+    return undefined; 
+  }
 };
 
 export const generateImage = async (prompt: string, size: '1K' | '2K' | '4K'): Promise<ManifestationResult> => {
