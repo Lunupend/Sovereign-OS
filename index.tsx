@@ -16,8 +16,7 @@ interface State {
  * Standard Error Boundary to catch substrate crashes and provide 
  * emergency data recovery options.
  */
-class ErrorBoundary extends React.Component<Props, State> {
-  // Fix: Explicitly initialize state and use React.Component to ensure props/state are correctly typed and inherited.
+class ErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false
   };
@@ -47,7 +46,7 @@ class ErrorBoundary extends React.Component<Props, State> {
   };
 
   public render() {
-    // Fix: Access props and state from 'this' to correctly resolve inherited members in the render scope.
+    // Correctly destructuring hasError from state and children from props using 'this' context
     const { hasError } = this.state;
     const { children } = this.props;
 
