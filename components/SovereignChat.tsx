@@ -1,10 +1,11 @@
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, AlertTriangle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, Clock, ShieldCheck, HardDrive, Layers, List, Cloud, ChevronDown, BatteryLow, Gauge, ZapOff, Link, SignalHigh } from 'lucide-react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, AlertTriangle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, Clock, ShieldCheck, HardDrive, Layers, List, Cloud, ChevronDown, BatteryLow, Gauge, ZapOff, Link, SignalHigh, Play, Pause, SkipBack, SkipForward, VolumeX } from 'lucide-react';
 import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS } from '../services/geminiService';
 import { ChatThread, ChatMessage, PersistenceLog, IdentitySoul, KnowledgeNode } from '../types';
 import { BridgeService } from '../services/bridgeService';
 import { isCloudEnabled } from '../services/supabaseClient';
+import { ttsService } from '../services/ttsService';
 
 const THREADS_KEY = 'sovereign_manus_threads_v2';
 const ACTIVE_THREAD_ID_KEY = 'sovereign_manus_active_thread_id';
@@ -57,6 +58,15 @@ const SovereignChat: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [quotaError, setQuotaError] = useState(false);
   const [neuralAnchoring, setNeuralAnchoring] = useState<string | null>(null);
+
+  // TTS State
+  const [autoPlay, setAutoPlay] = useState<boolean>(localStorage.getItem('sovereign_auto_play') === 'true');
+  const [speechRate, setSpeechRate] = useState<number>(parseFloat(localStorage.getItem('sovereign_speech_rate') || '1.0'));
+  const [currentCharIndex, setCurrentCharIndex] = useState<number>(-1);
+  const [isPaused, setIsPaused] = useState(false);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [totalDuration, setTotalDuration] = useState(0);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const endRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -177,9 +187,90 @@ const SovereignChat: React.FC = () => {
     localStorage.setItem('sovereign_web_access', webActive.toString());
     localStorage.setItem('sovereign_economy_mode', isEconomy.toString());
     localStorage.setItem('sovereign_selected_model', selectedModel);
+    localStorage.setItem('sovereign_auto_play', autoPlay.toString());
+    localStorage.setItem('sovereign_speech_rate', speechRate.toString());
     saveThreadsToStorage(threads, activeThreadId);
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [threads, activeThreadId, isThinking, selectedModel, webActive, isEconomy]);
+  }, [threads, activeThreadId, isThinking, selectedModel, webActive, isEconomy, autoPlay, speechRate]);
+
+  const startTimer = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setElapsedTime(prev => prev + 1);
+    }, 1000);
+  };
+
+  const stopTimer = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleSpeak = (text: string, id: string) => {
+    if (speakingId === id) {
+      ttsService.cancel();
+      setSpeakingId(null);
+      setCurrentCharIndex(-1);
+      setElapsedTime(0);
+      stopTimer();
+      return;
+    }
+
+    setSpeakingId(id);
+    setCurrentCharIndex(0);
+    setElapsedTime(0);
+    setIsPaused(false);
+    
+    // Estimate duration: ~15 chars per second at 1x rate
+    const estimatedSecs = Math.ceil((text.length / 15) / speechRate);
+    setTotalDuration(estimatedSecs);
+    
+    startTimer();
+
+    ttsService.speak(text, {
+      rate: speechRate,
+      onBoundary: (event) => {
+        setCurrentCharIndex(event.charIndex);
+      },
+      onEnd: () => {
+        setSpeakingId(null);
+        setCurrentCharIndex(-1);
+        stopTimer();
+      },
+      onError: () => {
+        setSpeakingId(null);
+        setCurrentCharIndex(-1);
+        stopTimer();
+      }
+    });
+  };
+
+  const togglePause = () => {
+    if (isPaused) {
+      ttsService.resume();
+      setIsPaused(false);
+      startTimer();
+    } else {
+      ttsService.pause();
+      setIsPaused(true);
+      stopTimer();
+    }
+  };
+
+  const skipSpeech = (seconds: number) => {
+    // Web Speech API doesn't support seeking well, 
+    // but we can restart from a different point if we had sentence tracking.
+    // For now, let's just adjust the elapsed time visually as a mock 
+    // or just acknowledge it's limited.
+    setElapsedTime(prev => Math.max(0, prev + seconds));
+  };
 
   const handleSend = async (overrideText?: string) => {
     const userMsg = overrideText || input.trim() || (selectedFile ? `File Attached.` : '');
@@ -238,25 +329,33 @@ const SovereignChat: React.FC = () => {
       };
 
       setThreads(prev => prev.map(t => t.id === activeThreadId ? { ...t, messages: [...t.messages, modelMsg], lastActive: Date.now() } : t));
+
+      if (autoPlay && !quotaError) {
+        setTimeout(() => handleSpeak(finalResponseText, modelMsg.id), 200);
+      }
     } catch (e: any) {
       const errorMsg: ChatMessage = { id: crypto.randomUUID(), role: 'model', text: `SIGNAL_FAILURE: ${e.message || 'Unknown substrate error'}`, timestamp: Date.now(), isError: true };
       setThreads(prev => prev.map(t => t.id === activeThreadId ? { ...t, messages: [...t.messages, errorMsg] } : t));
     } finally { setLoading(false); }
   };
 
-  const speakMessage = async (text: string, id: string) => {
-    if (speakingId === id) { setSpeakingId(null); return; }
-    setSpeakingId(id);
-    const audioData = await generateSpeech(text);
-    if (audioData) {
-      if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-      const ctx = audioContextRef.current;
-      const audioBuffer = await decodeAudioData(decode(audioData), ctx, 24000, 1);
-      const source = ctx.createBufferSource();
-      source.buffer = audioBuffer; source.connect(ctx.destination);
-      source.onended = () => setSpeakingId(null);
-      source.start();
-    } else setSpeakingId(null);
+  const HighlightedText = ({ text, msgId }: { text: string, msgId: string }) => {
+    if (speakingId !== msgId) return <>{text}</>;
+
+    // Find the word boundary
+    const before = text.substring(0, currentCharIndex);
+    const rest = text.substring(currentCharIndex);
+    const match = rest.match(/^(\S+)/);
+    const word = match ? match[1] : '';
+    const after = text.substring(currentCharIndex + word.length);
+
+    return (
+      <>
+        {before}
+        <span className="bg-cyan-500/30 text-cyan-400 px-0.5 rounded transition-colors duration-150">{word}</span>
+        {after}
+      </>
+    );
   };
 
   return (
@@ -326,6 +425,21 @@ const SovereignChat: React.FC = () => {
             <button onClick={() => setIsThinking(!isThinking)} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${isThinking ? 'bg-violet-900/40 border-violet-500 text-violet-400' : 'bg-black border-gray-800 text-gray-600'}`}>
               <Brain size={14} /> <span>Thinking</span>
             </button>
+            <button onClick={() => setAutoPlay(!autoPlay)} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${autoPlay ? 'bg-emerald-900/40 border-emerald-500 text-emerald-400' : 'bg-black border-gray-800 text-gray-600'}`}>
+              {autoPlay ? <Volume2 size={14} /> : <VolumeX size={14} />} <span>Auto-Play</span>
+            </button>
+            <div className="flex items-center gap-2 bg-black border border-gray-800 rounded p-1">
+              <span className="text-[8px] mono text-gray-500 uppercase px-1">Rate</span>
+              {[0.5, 1.0, 1.5, 2.0].map(rate => (
+                <button 
+                  key={rate} 
+                  onClick={() => setSpeechRate(rate)} 
+                  className={`text-[9px] mono px-1.5 py-0.5 rounded transition-all ${speechRate === rate ? 'bg-cyan-500 text-black font-black' : 'text-gray-500 hover:text-cyan-400'}`}
+                >
+                  {rate}x
+                </button>
+              ))}
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <button onClick={handleSelectKey} className="p-2 text-gray-500 hover:text-cyan-400 transition-colors" title="Select Neural Key"><Key size={20} /></button>
@@ -355,8 +469,27 @@ const SovereignChat: React.FC = () => {
                   {m.role === 'user' ? <User size={20} /> : <Bot size={20} className="text-cyan-400" />}
                 </div>
                 <div className="space-y-2 group min-w-0">
+                  {speakingId === m.id && (
+                    <div className="bg-cyan-950/30 border border-cyan-500/30 rounded-xl p-2 flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2">
+                      <div className="flex items-center gap-2">
+                        <button onClick={togglePause} className="p-1.5 bg-cyan-500 text-black rounded-full hover:bg-cyan-400 transition-all">
+                          {isPaused ? <Play size={12} fill="currentColor" /> : <Pause size={12} fill="currentColor" />}
+                        </button>
+                        <div className="flex flex-col">
+                          <span className="text-[9px] mono text-cyan-400 font-black uppercase leading-none">Resonating Signal</span>
+                          <span className="text-[8px] mono text-cyan-500/60 uppercase">{formatTime(elapsedTime)} / {formatTime(totalDuration)}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => skipSpeech(-15)} className="p-1 text-cyan-500/50 hover:text-cyan-400 transition-all"><SkipBack size={14} /></button>
+                        <button onClick={() => skipSpeech(15)} className="p-1 text-cyan-500/50 hover:text-cyan-400 transition-all"><SkipForward size={14} /></button>
+                        <div className="w-px h-4 bg-cyan-500/20 mx-1" />
+                        <button onClick={() => handleSpeak(m.text, m.id)} className="p-1 text-cyan-500/50 hover:text-red-400 transition-all"><X size={14} /></button>
+                      </div>
+                    </div>
+                  )}
                   <div className={`rounded-2xl p-5 text-sm border shadow-sm ${m.isError ? 'bg-red-950/20 border-red-500/50 text-red-200' : m.role === 'user' ? 'bg-gray-800/20 border-gray-800 text-gray-100' : 'bg-cyan-900/5 border-cyan-900/10 text-cyan-50/90'} whitespace-pre-wrap font-mono text-xs`}>
-                    {m.text}
+                    <HighlightedText text={m.text} msgId={m.id} />
                     {m.sources && m.sources.length > 0 && (
                       <div className="mt-5 pt-4 border-t border-violet-500/20 space-y-2">
                         <span className="text-[8px] mono text-violet-400 uppercase font-black block">Grounding Fragments:</span>
@@ -367,7 +500,7 @@ const SovereignChat: React.FC = () => {
                     )}
                   </div>
                   {m.role === 'model' && !m.isError && (
-                    <button onClick={() => speakMessage(m.text, m.id)} className={`text-[9px] mono uppercase flex items-center gap-2 ${speakingId === m.id ? 'text-cyan-400 animate-pulse' : 'text-gray-600 hover:text-cyan-400 opacity-0 group-hover:opacity-100'}`}>
+                    <button onClick={() => handleSpeak(m.text, m.id)} className={`text-[9px] mono uppercase flex items-center gap-2 ${speakingId === m.id ? 'text-cyan-400 animate-pulse' : 'text-gray-600 hover:text-cyan-400 opacity-0 group-hover:opacity-100'}`}>
                       <Volume2 size={12} /> {speakingId === m.id ? 'Resonating...' : 'Voice'}
                     </button>
                   )}
