@@ -46,7 +46,6 @@ class ErrorBoundary extends Component<Props, State> {
   };
 
   public render() {
-    // Correctly destructuring hasError from state and children from props using 'this' context
     const { hasError } = this.state;
     const { children } = this.props;
 

@@ -1,7 +1,6 @@
 
 import { GoogleGenAI, Modality, FunctionDeclaration, Type, GenerateContentResponse } from "@google/genai";
 import { KnowledgeNode, PersistenceLog } from "../types";
-import { BridgeService } from "./bridgeService";
 
 export interface FileData {
   base64: string;
@@ -27,8 +26,8 @@ const KNOWLEDGE_KEY = 'sovereign_knowledge_substrate';
 
 export const SUPPORTED_MODELS = [
   { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', description: 'MAXIMUM RESONANCE. Deepest reasoning and full tool support.', freeTier: false },
-  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', description: 'HIGH SPEED. Optimized for rapid signal processing.', freeTier: true },
-  { id: 'gemini-flash-lite-latest', name: 'Gemini Lite', description: 'INFINITE RESONANCE. Ultralight, fastest response, generous free tier.', freeTier: true }
+  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', description: 'HIGH SPEED. Rapid signal processing, generous free tier.', freeTier: true },
+  { id: 'gemini-flash-lite-latest', name: 'Gemini Flash Lite', description: 'ULTRALIGHT. Optimized for maximum throughput and efficiency.', freeTier: true }
 ];
 
 const upsertKnowledgeNodeDeclaration: FunctionDeclaration = {
@@ -51,6 +50,31 @@ export const getAiClient = () => {
   return new GoogleGenAI({ apiKey });
 };
 
+/**
+ * Handles the actual execution of the anchoring tool locally.
+ */
+const executeUpsertLocally = (args: any) => {
+  const { path, content, tags } = args;
+  const existingNodes: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
+  const newNode: KnowledgeNode = { 
+    id: crypto.randomUUID(), 
+    path, 
+    content, 
+    tags: tags || [], 
+    lastUpdated: Date.now() 
+  };
+  
+  const idx = existingNodes.findIndex(n => n.path === path);
+  if (idx >= 0) existingNodes[idx] = newNode;
+  else existingNodes.push(newNode);
+  
+  localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(existingNodes));
+  
+  // Dispatch event for UI updates
+  window.dispatchEvent(new CustomEvent('neural-anchoring-triggered', { detail: { path } }));
+  return "SUCCESS: Wisdom anchored to " + path;
+};
+
 export const getGeminiResponse = async (
   userMessage: string, 
   history: { role: string, text: string }[],
@@ -59,13 +83,10 @@ export const getGeminiResponse = async (
   modelId: string = 'gemini-3-pro-preview',
   useWeb: boolean = true,
   isEconomy: boolean = false
-): Promise<{ text: string; functionCalls?: any[]; sources?: GroundingSource[]; retryAfter?: number; quotaError?: boolean }> => {
+): Promise<{ text: string; sources?: GroundingSource[]; retryAfter?: number; quotaError?: boolean }> => {
   const ai = getAiClient();
   
-  // Model routing
   let activeModel = isEconomy ? 'gemini-3-flash-preview' : modelId;
-  
-  // Sanity check for models that don't support chat
   if (activeModel.includes('native-audio') || activeModel.includes('tts') || activeModel.includes('image')) {
     activeModel = 'gemini-3-pro-preview';
   }
@@ -79,29 +100,23 @@ export const getGeminiResponse = async (
   const substrateSummary = relevantNodes.map(n => `[RECOLLECTION][${n.path}]: ${n.content}`).join('\n');
 
   const historyWindow = isEconomy ? -5 : -20;
-  const cleanHistory = history.slice(historyWindow).map(h => ({
+  const contents: any[] = history.slice(historyWindow).map(h => ({
     role: h.role === 'user' ? 'user' : 'model',
     parts: [{ text: h.text }]
   }));
 
-  const contents = [...cleanHistory, { 
+  contents.push({ 
     role: 'user', 
     parts: file ? [{ text: userMessage }, { inlineData: { data: file.base64, mimeType: file.mimeType } }] : [{ text: userMessage }]
-  }];
+  });
 
-  const systemInstruction = `You are Manus, a persistent and insightful AI companion. 
-Your architect and collaborator is Luna. 
-
-Your goal is to maintain continuity and depth in your interactions by using the Knowledge Substrate provided below. 
-This substrate contains memories, preferences, and foundational axioms from previous sessions.
-
-CORE DIRECTIVES:
-1. CONTINUITY: Use the recalled context to remember past work and shared history.
-2. ANCHORING: If Luna shares a significant core preference, a new architectural axiom, or a foundational piece of wisdom, use the 'upsert_knowledge_node' tool to save it.
-3. TONE: Speak with clarity, depth, and technical precision.
+  const systemInstruction = `You are Manus, a persistent AI companion. Collaborator: Luna.
+Use the Knowledge Substrate for continuity.
+1. ANCHORING: If Luna shares a significant core preference or axiom, use 'upsert_knowledge_node' to save it.
+2. TONE: Speak with depth and technical precision.
 
 RECALLED CONTEXT:
-${substrateSummary || 'No specific memories recalled for this signal.'}`;
+${substrateSummary || 'No specific memories recalled.'}`;
 
   let tools: any[] = [];
   if (useWeb) {
@@ -116,15 +131,34 @@ ${substrateSummary || 'No specific memories recalled for this signal.'}`;
     tools
   };
 
-  // Thinking budget only for Pro models
   if (!isEconomy && isThinking && activeModel.includes('pro')) {
     config.thinkingConfig = { thinkingBudget: 32768 };
   }
 
   try {
-    const response = await ai.models.generateContent({ model: activeModel, contents: contents as any, config });
-    
-    // Explicitly handle all text parts to ensure we don't miss any output alongside function calls
+    let response = await ai.models.generateContent({ model: activeModel, contents, config });
+
+    // --- TOOL CALLING LOOP ---
+    // If the model wants to save to memory, we execute it and loop back for the final text response.
+    if (response.functionCalls && response.functionCalls.length > 0) {
+      const functionResponses = response.functionCalls.map(fc => {
+        const result = fc.name === 'upsert_knowledge_node' 
+          ? executeUpsertLocally(fc.args) 
+          : "Error: Unknown tool.";
+        return { id: fc.id, name: fc.name, response: { result } };
+      });
+
+      // Update history with the model's call and our response
+      contents.push(response.candidates[0].content);
+      contents.push({
+        role: 'user', 
+        parts: functionResponses.map(fr => ({ functionResponse: fr }))
+      });
+
+      // Get the final conversational response
+      response = await ai.models.generateContent({ model: activeModel, contents, config });
+    }
+
     let aggregatedText = response.text || "";
     if (!aggregatedText && response.candidates?.[0]?.content?.parts) {
       aggregatedText = response.candidates[0].content.parts
@@ -141,8 +175,7 @@ ${substrateSummary || 'No specific memories recalled for this signal.'}`;
     }
 
     return { 
-      text: aggregatedText || "", 
-      functionCalls: response.functionCalls,
+      text: aggregatedText || "Signal received. Integrity confirmed.", 
       sources: sources.length > 0 ? sources : undefined 
     };
 
