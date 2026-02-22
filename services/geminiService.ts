@@ -122,27 +122,93 @@ ${substrateSummary || 'No specific memories recalled for this signal.'}`;
   }
 
   try {
-    const response = await ai.models.generateContent({ model: activeModel, contents: contents as any, config });
-    
-    // Explicitly handle all text parts to ensure we don't miss any output alongside function calls
-    let aggregatedText = response.text || "";
-    if (!aggregatedText && response.candidates?.[0]?.content?.parts) {
-      aggregatedText = response.candidates[0].content.parts
-        .filter(part => part.text)
-        .map(part => part.text)
-        .join("\n");
+    let currentContents: any[] = [...contents];
+    let allFunctionCalls: any[] = [];
+    let finalAggregatedText = "";
+    let loopCount = 0;
+    const maxLoops = 3;
+    let lastResponse: GenerateContentResponse | null = null;
+
+    while (loopCount < maxLoops) {
+      const response = await ai.models.generateContent({ model: activeModel, contents: currentContents as any, config });
+      lastResponse = response;
+      
+      // Extract text from this turn
+      let turnText = response.text || "";
+      if (!turnText && response.candidates?.[0]?.content?.parts) {
+        turnText = response.candidates[0].content.parts
+          .filter(part => part.text)
+          .map(part => part.text)
+          .join("\n");
+      }
+      if (turnText) {
+        finalAggregatedText += (finalAggregatedText ? "\n" : "") + turnText;
+      }
+
+      const functionCalls = response.functionCalls;
+      if (!functionCalls || functionCalls.length === 0) {
+        break;
+      }
+
+      allFunctionCalls.push(...functionCalls);
+
+      // Handle function calls
+      const functionResponses = [];
+      for (const fc of functionCalls) {
+        if (fc.name === 'upsert_knowledge_node') {
+          const args = fc.args as any;
+          const path = args?.path;
+          const content = args?.content;
+          const tags = args?.tags;
+          
+          if (!path || !content) continue;
+
+          // Execute the tool
+          const libraryData: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
+          const newNode: KnowledgeNode = { 
+            id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(7), 
+            path, 
+            content, 
+            tags: tags || [], 
+            lastUpdated: Date.now() 
+          };
+          const idx = libraryData.findIndex(n => n.path === path);
+          if (idx >= 0) libraryData[idx] = newNode;
+          else libraryData.push(newNode);
+          localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(libraryData));
+          
+          functionResponses.push({
+            name: fc.name,
+            response: { content: "Success: Knowledge anchored to substrate." },
+            id: fc.id
+          });
+        }
+      }
+
+      if (functionResponses.length > 0 && response.candidates?.[0]?.content) {
+        // Add the model's turn (the function calls)
+        currentContents.push(response.candidates[0].content);
+        // Add the tool's turn (the responses)
+        currentContents.push({
+          role: 'user',
+          parts: functionResponses.map(r => ({ functionResponse: r }))
+        });
+        loopCount++;
+      } else {
+        break;
+      }
     }
 
     const sources: GroundingSource[] = [];
-    if (response.candidates?.[0]?.groundingMetadata?.groundingChunks) {
-      response.candidates[0].groundingMetadata.groundingChunks.forEach((chunk: any) => {
+    if (lastResponse?.candidates?.[0]?.groundingMetadata?.groundingChunks) {
+      lastResponse.candidates[0].groundingMetadata.groundingChunks.forEach((chunk: any) => {
         if (chunk.web) sources.push({ uri: chunk.web.uri, title: chunk.web.title });
       });
     }
 
     return { 
-      text: aggregatedText || "", 
-      functionCalls: response.functionCalls,
+      text: finalAggregatedText || "", 
+      functionCalls: allFunctionCalls.length > 0 ? allFunctionCalls : undefined,
       sources: sources.length > 0 ? sources : undefined 
     };
 

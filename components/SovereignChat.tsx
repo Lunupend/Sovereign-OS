@@ -304,14 +304,7 @@ const SovereignChat: React.FC = () => {
         for (const fc of result.functionCalls) {
           if (fc.name === 'upsert_knowledge_node') {
             anchorsPerformed++;
-            const { path, content } = fc.args;
-            setNeuralAnchoring(path);
-            const existingNodes: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
-            const newNode: KnowledgeNode = { id: crypto.randomUUID(), path, content, tags: fc.args.tags || [], lastUpdated: Date.now() };
-            const idx = existingNodes.findIndex(n => n.path === path);
-            if (idx >= 0) existingNodes[idx] = newNode;
-            else existingNodes.push(newNode);
-            localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(existingNodes));
+            setNeuralAnchoring(fc.args.path);
             setTimeout(() => setNeuralAnchoring(null), 3000);
           }
         }
