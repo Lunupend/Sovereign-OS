@@ -35,13 +35,25 @@ const upsertKnowledgeNodeDeclaration: FunctionDeclaration = {
   name: 'upsert_knowledge_node',
   parameters: {
     type: Type.OBJECT,
-    description: 'ANCHOR WISDOM: Writes a node to the Knowledge Substrate. Use this when the user shares a core preference, a foundational axiom, or a piece of wisdom worth remembering across sessions.',
+    description: 'ANCHOR WISDOM: Writes a node to the Knowledge Substrate. Use this when the user shares a core preference, a foundational axiom, or a piece of wisdom worth remembering across sessions. Also used for structural subfolder pathing.',
     properties: {
       path: { type: Type.STRING, description: 'The folder-like path (e.g. "Identity/Axioms" or "Preferences/Tone").' },
-      content: { type: Type.STRING, description: 'The pivotal wisdom or preference to anchor.' },
+      content: { type: Type.STRING, description: 'The pivotal wisdom or preference to anchor. For structural nodes, this can be a summary of the subfolder.' },
       tags: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'Search tags for recall.' }
     },
     required: ['path', 'content']
+  },
+};
+
+const deleteKnowledgeNodeDeclaration: FunctionDeclaration = {
+  name: 'delete_knowledge_node',
+  parameters: {
+    type: Type.OBJECT,
+    description: 'PURGE STATIC: Removes a node from the Knowledge Substrate. Use this for hygiene, archiving (after moving), or correcting errors.',
+    properties: {
+      path: { type: Type.STRING, description: 'The exact path of the node to delete.' }
+    },
+    required: ['path']
   },
 };
 
@@ -107,7 +119,7 @@ ${substrateSummary || 'No specific memories recalled for this signal.'}`;
   if (useWeb) {
     tools = [{ googleSearch: {} }];
   } else {
-    tools = [{ functionDeclarations: [upsertKnowledgeNodeDeclaration] }];
+    tools = [{ functionDeclarations: [upsertKnowledgeNodeDeclaration, deleteKnowledgeNodeDeclaration] }];
   }
 
   const config: any = {
@@ -180,6 +192,20 @@ ${substrateSummary || 'No specific memories recalled for this signal.'}`;
           functionResponses.push({
             name: fc.name,
             response: { content: "Success: Knowledge anchored to substrate." },
+            id: fc.id
+          });
+        } else if (fc.name === 'delete_knowledge_node') {
+          const args = fc.args as any;
+          const path = args?.path;
+          if (!path) continue;
+
+          const libraryData: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
+          const filteredData = libraryData.filter(n => n.path !== path);
+          localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(filteredData));
+
+          functionResponses.push({
+            name: fc.name,
+            response: { content: `Success: Node at ${path} purged from substrate.` },
             id: fc.id
           });
         }

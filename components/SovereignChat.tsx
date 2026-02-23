@@ -302,7 +302,7 @@ const SovereignChat: React.FC = () => {
 
       if (result.functionCalls) {
         for (const fc of result.functionCalls) {
-          if (fc.name === 'upsert_knowledge_node') {
+          if (fc.name === 'upsert_knowledge_node' || fc.name === 'delete_knowledge_node') {
             anchorsPerformed++;
             setNeuralAnchoring(fc.args.path);
             setTimeout(() => setNeuralAnchoring(null), 3000);

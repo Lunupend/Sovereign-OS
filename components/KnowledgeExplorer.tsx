@@ -101,7 +101,7 @@ const KnowledgeExplorer: React.FC = () => {
 
   const deleteNode = (id: string) => {
     if (!confirm("Permanently purge this node?")) return;
-    const updated = nodes.filter(n => n.id !== id);
+    const updated = nodes.filter((n: KnowledgeNode) => n.id !== id);
     setNodes(updated);
     localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(updated));
     if (selectedNode?.id === id) setSelectedNode(null);
@@ -110,7 +110,7 @@ const KnowledgeExplorer: React.FC = () => {
   const handleSave = () => {
     if (!editPath.trim()) return;
     const currentLib = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
-    const existingIndex = currentLib.findIndex(n => n.path === editPath);
+    const existingIndex = currentLib.findIndex((n: KnowledgeNode) => n.path === editPath);
     const newNode: KnowledgeNode = {
       id: existingIndex >= 0 ? currentLib[existingIndex].id : crypto.randomUUID(),
       path: editPath,

@@ -56,7 +56,7 @@ export const BridgeService = {
       .select('*');
     
     if (error) return [];
-    return data.map(d => ({
+    return data.map((d: any) => ({
       id: d.id,
       path: d.path,
       content: d.content,
@@ -92,7 +92,7 @@ export const BridgeService = {
       .order('timestamp', { ascending: false });
     
     if (error) return [];
-    return data.map(d => ({
+    return data.map((d: any) => ({
       id: d.id,
       entry: d.entry,
       type: d.type as any,
@@ -128,7 +128,7 @@ export const BridgeService = {
       .order('last_active', { ascending: false });
     
     if (error) return [];
-    return data.map(d => ({
+    return data.map((d: any) => ({
       id: d.id,
       title: d.title,
       messages: d.messages,
