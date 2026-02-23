@@ -2,10 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Folder, FileText, Search, ChevronRight, ChevronDown, Clock, Trash2, BookOpen, Plus, Save, X, RefreshCw, History, AlertTriangle, Zap, Sparkles, Download, Upload, FileJson, Database, LifeBuoy } from 'lucide-react';
 import { KnowledgeNode, ChatMessage, IdentitySoul, ChatThread } from '../types';
 import { BridgeService } from '../services/bridgeService';
-import { VanguardService, ReflectionProposal } from '../services/vanguardService';
+import { VanguardService, HygieneLog } from '../services/vanguardService';
 import { isCloudEnabled } from '../services/supabaseClient';
 import { MANUAL_CHAPTERS } from '../content/manual';
-import { SelfReflection } from './SelfReflection';
 
 const KNOWLEDGE_KEY = 'sovereign_knowledge_substrate';
 const VAULT_KEY = 'sovereign_identity_vault';
@@ -20,7 +19,7 @@ const KnowledgeExplorer: React.FC = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [isReconstructing, setIsReconstructing] = useState(false);
-  const [reflectionProposal, setReflectionProposal] = useState<ReflectionProposal | null>(null);
+  const [hygieneLog, setHygieneLog] = useState<HygieneLog | null>(null);
   
   const [editPath, setEditPath] = useState('');
   const [editContent, setEditContent] = useState('');
@@ -129,37 +128,30 @@ const KnowledgeExplorer: React.FC = () => {
     setIsCreating(false);
   };
 
-  const handleReflect = async () => {
-    setIsScanning(true);
-    try {
-      const proposal = await VanguardService.proposeReflection(nodes);
-      setReflectionProposal(proposal);
-    } catch (e) {
-      console.error("Reflection Error:", e);
-    } finally {
-      setIsScanning(false);
-    }
-  };
-
-  const handleConfirmReflection = async () => {
-    if (!reflectionProposal) return;
+  const handleHygiene = async () => {
+    if (!confirm("AUTONOMOUS HYGIENE: Manus will now identify and excise 'Static' fragments without further confirmation. Proceed?")) return;
     
     setIsScanning(true);
     try {
-      const updated = nodes.filter(n => !reflectionProposal.candidates.find(c => c.id === n.id));
-      setNodes(updated);
-      localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(updated));
+      const { updatedNodes, log } = VanguardService.executeHygiene(nodes);
       
+      // Update Local
+      setNodes(updatedNodes);
+      localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(updatedNodes));
+      
+      // Update Cloud
       if (isCloudEnabled) {
-        for (const candidate of reflectionProposal.candidates) {
-          await BridgeService.deleteNodeByPath(candidate.path);
+        for (const action of log.actions) {
+          if (action.action === 'EXCISE') {
+            await BridgeService.deleteNodeByPath(action.path);
+          }
         }
       }
       
-      setReflectionProposal(null);
-      alert(`SYNTHESIS COMPLETE: ${reflectionProposal.candidates.length} fragments archived.`);
+      setHygieneLog(log);
+      setTimeout(() => setHygieneLog(null), 10000); // Clear log after 10s
     } catch (e) {
-      console.error("Synthesis Error:", e);
+      console.error("Hygiene Error:", e);
     } finally {
       setIsScanning(false);
     }
@@ -217,11 +209,30 @@ const KnowledgeExplorer: React.FC = () => {
     <div className="flex flex-col md:flex-row h-full overflow-hidden bg-[#020202] relative">
       <input type="file" ref={fileInputRef} onChange={handleSoulImport} className="hidden" accept=".json" />
       
-      <SelfReflection 
-        proposal={reflectionProposal} 
-        onConfirm={handleConfirmReflection} 
-        onDismiss={() => setReflectionProposal(null)} 
-      />
+      {hygieneLog && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] w-full max-w-md animate-in slide-in-from-top duration-500">
+           <div className="bg-black/90 border border-violet-500/30 rounded-2xl p-4 shadow-[0_0_30px_rgba(139,92,246,0.2)] backdrop-blur-md">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles size={14} className="text-violet-400 animate-pulse" />
+                  <span className="text-[10px] mono text-violet-400 uppercase font-black tracking-widest">Vanguard Audit Log</span>
+                </div>
+                <span className="text-[8px] mono text-gray-600">{new Date(hygieneLog.timestamp).toLocaleTimeString()}</span>
+              </div>
+              <div className="space-y-1 max-h-32 overflow-y-auto custom-scrollbar pr-2">
+                {hygieneLog.actions.map((action, i) => (
+                  <div key={i} className="flex items-center justify-between text-[9px] mono py-1 border-b border-white/5 last:border-0">
+                    <span className="text-gray-400 truncate max-w-[200px]">{action.path}</span>
+                    <span className="text-red-500/70 font-black">{action.action}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 pt-2 border-t border-white/5 text-center">
+                <span className="text-[8px] mono text-gray-500 uppercase">Autonomous Hygiene Cycle Complete.</span>
+              </div>
+           </div>
+        </div>
+      )}
       
       <div className="w-full md:w-80 border-b md:border-b-0 md:border-r border-cyan-900/20 p-4 flex flex-col gap-4 overflow-y-auto custom-scrollbar bg-black/50 z-10">
         <div className="space-y-4">
@@ -249,9 +260,9 @@ const KnowledgeExplorer: React.FC = () => {
                <Plus size={14} /> Anchor
              </button>
              <button 
-               onClick={handleReflect}
+               onClick={handleHygiene}
                className="p-2 bg-violet-900/20 border border-violet-500/30 rounded text-violet-400 hover:bg-violet-400 hover:text-black transition-all" 
-               title="Self-Reflection"
+               title="Autonomous Hygiene"
              >
                <Sparkles size={16} />
              </button>

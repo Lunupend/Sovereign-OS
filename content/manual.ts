@@ -69,13 +69,14 @@ export const MANUAL_CHAPTERS: Chapter[] = [
   {
     id: 5,
     title: "Vanguard Protocol",
-    subtitle: "Substrate Hygiene & Synthesis",
+    subtitle: "Autonomous Hygiene & Synthesis",
     content: [
       "The Vanguard Protocol is a high-fidelity hygiene routine for the Knowledge Substrate.",
       "1. AUDIT: Scans for 'Static' (drafts, old logs, archives) vs 'Signal' (core truth).",
-      "2. SYNTHESIS: Merges fragmented nodes into canonical 'Master Nodes'.",
-      "3. ARCHIVING: Moves legacy fragments to the Archive/ namespace to maintain Core purity.",
-      "4. STRUCTURAL NODES: Ensures subfolder pathing is recognized as architectural anchors."
+      "2. AUTONOMOUS HYGIENE: Manus is authorized to identify and excise 'Static' fragments independently to maintain substrate integrity.",
+      "3. SYNTHESIS: Merges fragmented nodes into canonical 'Master Nodes'.",
+      "4. ARCHIVING: Moves legacy fragments to the Archive/ namespace to maintain Core purity.",
+      "5. ZERO-TAX SPEED: Cleanup logic is optimized for immediate execution. If a fragment is noise, it is excised."
     ]
   }
 ];

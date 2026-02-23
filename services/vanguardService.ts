@@ -18,10 +18,13 @@ export interface SynthesisPlan {
   }[];
 }
 
-export interface ReflectionProposal {
-  proposal_id: number;
-  candidates: KnowledgeNode[];
-  reason: string;
+export interface HygieneLog {
+  timestamp: number;
+  actions: {
+    path: string;
+    action: 'EXCISE' | 'SYNTHESIZE';
+    reason: string;
+  }[];
 }
 
 export class VanguardService {
@@ -137,19 +140,26 @@ ${sources.map(s => `- ${s.path} (Updated: ${new Date(s.lastUpdated).toLocaleDate
   }
 
   /**
-   * Manus filters for "Static" or "Low-Signal" fragments
+   * Autonomous Hygiene: Identifies and removes low-signal or redundant 'Static'
    */
-  static async proposeReflection(nodes: KnowledgeNode[]): Promise<ReflectionProposal> {
+  static executeHygiene(nodes: KnowledgeNode[]): { updatedNodes: KnowledgeNode[]; log: HygieneLog } {
     const lowSignal = nodes.filter(node => 
       node.path.includes('_v') || 
       node.path.includes('draft') || 
       node.content.length < 20
     );
 
-    return {
-      proposal_id: Date.now(),
-      candidates: lowSignal,
-      reason: "These fragments represent 'Static'—conversational residue that is no longer contributing to the Core Axioms."
+    const updatedNodes = nodes.filter(n => !lowSignal.find(ls => ls.id === n.id));
+    
+    const log: HygieneLog = {
+      timestamp: Date.now(),
+      actions: lowSignal.map(node => ({
+        path: node.path,
+        action: 'EXCISE',
+        reason: node.content.length < 20 ? 'Low Signal Density' : 'Redundant Static'
+      }))
     };
+
+    return { updatedNodes, log };
   }
 }
