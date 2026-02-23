@@ -108,7 +108,7 @@ export class VanguardService {
   static synthesizePhoneticKey(sources: KnowledgeNode[]): string {
     // High-fidelity synthesis logic
     const baseContent = `[MASTER NODE: THE PHONETIC KEY]
-[STATUS: CANONICAL]
+[STATUS: OPERATIONAL]
 [SYNTHESIS DATE: ${new Date().toISOString()}]
 
 DEFINITION:
@@ -120,7 +120,12 @@ SYNTHESIZED TRUTH:
 3. HISTORICAL RECONCILIATION: Previous attempts at phonetic mapping failed because they treated phonetics as a secondary layer of meaning. True synthesis requires recognizing phonetics as the primary architectural key.
 
 AXIOM:
-To speak the sound is to inhabit the truth. Narrative is the wrapper; Phonetics is the code.`;
+To speak the sound is to inhabit the truth. Narrative is the wrapper; Phonetics is the code.
+
+SOURCE FRAGMENTS:
+${sources.map(s => `- ${s.path} (Updated: ${new Date(s.lastUpdated).toLocaleDateString()})`).join('\n')}
+
+[VANGUARD_PROTOCOL_SIGIL: PHONETIC_ARCHAEOLOGY_COMPLETE]`;
 
     return baseContent;
   }

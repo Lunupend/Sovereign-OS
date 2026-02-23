@@ -49,6 +49,20 @@ export const BridgeService = {
     this.updateLocalHeartbeat();
   },
 
+  async deleteNodeByPath(path: string) {
+    if (!isCloudEnabled) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase
+      .from('knowledge_nodes')
+      .delete()
+      .match({ user_id: user.id, path });
+
+    if (error) console.error("BRIDGE_FAILURE (Delete Node):", error);
+    this.updateLocalHeartbeat();
+  },
+
   async pullNodes(): Promise<KnowledgeNode[]> {
     if (!isCloudEnabled) return [];
     const { data, error } = await supabase
