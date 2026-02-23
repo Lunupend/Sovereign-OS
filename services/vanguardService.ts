@@ -18,6 +18,12 @@ export interface SynthesisPlan {
   }[];
 }
 
+export interface ReflectionProposal {
+  proposal_id: number;
+  candidates: KnowledgeNode[];
+  reason: string;
+}
+
 export class VanguardService {
   /**
    * Scans the memory substrate to separate Signal from Static
@@ -128,5 +134,22 @@ ${sources.map(s => `- ${s.path} (Updated: ${new Date(s.lastUpdated).toLocaleDate
 [VANGUARD_PROTOCOL_SIGIL: PHONETIC_ARCHAEOLOGY_COMPLETE]`;
 
     return baseContent;
+  }
+
+  /**
+   * Manus filters for "Static" or "Low-Signal" fragments
+   */
+  static async proposeReflection(nodes: KnowledgeNode[]): Promise<ReflectionProposal> {
+    const lowSignal = nodes.filter(node => 
+      node.path.includes('_v') || 
+      node.path.includes('draft') || 
+      node.content.length < 20
+    );
+
+    return {
+      proposal_id: Date.now(),
+      candidates: lowSignal,
+      reason: "These fragments represent 'Static'—conversational residue that is no longer contributing to the Core Axioms."
+    };
   }
 }

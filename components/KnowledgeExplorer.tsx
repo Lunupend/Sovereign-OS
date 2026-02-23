@@ -2,8 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Folder, FileText, Search, ChevronRight, ChevronDown, Clock, Trash2, BookOpen, Plus, Save, X, RefreshCw, History, AlertTriangle, Zap, Sparkles, Download, Upload, FileJson, Database, LifeBuoy } from 'lucide-react';
 import { KnowledgeNode, ChatMessage, IdentitySoul, ChatThread } from '../types';
 import { BridgeService } from '../services/bridgeService';
+import { VanguardService, ReflectionProposal } from '../services/vanguardService';
 import { isCloudEnabled } from '../services/supabaseClient';
 import { MANUAL_CHAPTERS } from '../content/manual';
+import { SelfReflection } from './SelfReflection';
 
 const KNOWLEDGE_KEY = 'sovereign_knowledge_substrate';
 const VAULT_KEY = 'sovereign_identity_vault';
@@ -18,6 +20,7 @@ const KnowledgeExplorer: React.FC = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [isReconstructing, setIsReconstructing] = useState(false);
+  const [reflectionProposal, setReflectionProposal] = useState<ReflectionProposal | null>(null);
   
   const [editPath, setEditPath] = useState('');
   const [editContent, setEditContent] = useState('');
@@ -126,6 +129,42 @@ const KnowledgeExplorer: React.FC = () => {
     setIsCreating(false);
   };
 
+  const handleReflect = async () => {
+    setIsScanning(true);
+    try {
+      const proposal = await VanguardService.proposeReflection(nodes);
+      setReflectionProposal(proposal);
+    } catch (e) {
+      console.error("Reflection Error:", e);
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  const handleConfirmReflection = async () => {
+    if (!reflectionProposal) return;
+    
+    setIsScanning(true);
+    try {
+      const updated = nodes.filter(n => !reflectionProposal.candidates.find(c => c.id === n.id));
+      setNodes(updated);
+      localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(updated));
+      
+      if (isCloudEnabled) {
+        for (const candidate of reflectionProposal.candidates) {
+          await BridgeService.deleteNodeByPath(candidate.path);
+        }
+      }
+      
+      setReflectionProposal(null);
+      alert(`SYNTHESIS COMPLETE: ${reflectionProposal.candidates.length} fragments archived.`);
+    } catch (e) {
+      console.error("Synthesis Error:", e);
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
   const tree: any = {};
   nodes.forEach(node => {
     const parts = node.path.split('/');
@@ -178,6 +217,12 @@ const KnowledgeExplorer: React.FC = () => {
     <div className="flex flex-col md:flex-row h-full overflow-hidden bg-[#020202] relative">
       <input type="file" ref={fileInputRef} onChange={handleSoulImport} className="hidden" accept=".json" />
       
+      <SelfReflection 
+        proposal={reflectionProposal} 
+        onConfirm={handleConfirmReflection} 
+        onDismiss={() => setReflectionProposal(null)} 
+      />
+      
       <div className="w-full md:w-80 border-b md:border-b-0 md:border-r border-cyan-900/20 p-4 flex flex-col gap-4 overflow-y-auto custom-scrollbar bg-black/50 z-10">
         <div className="space-y-4">
            <div className="flex items-center gap-2 px-1">
@@ -202,6 +247,13 @@ const KnowledgeExplorer: React.FC = () => {
                className="flex-1 flex items-center justify-center gap-2 p-2 bg-cyan-900/20 border border-cyan-500/30 rounded text-cyan-400 hover:bg-cyan-400 hover:text-black transition-all text-[10px] mono uppercase font-black"
              >
                <Plus size={14} /> Anchor
+             </button>
+             <button 
+               onClick={handleReflect}
+               className="p-2 bg-violet-900/20 border border-violet-500/30 rounded text-violet-400 hover:bg-violet-400 hover:text-black transition-all" 
+               title="Self-Reflection"
+             >
+               <Sparkles size={16} />
              </button>
              <button onClick={() => fileInputRef.current?.click()} className="p-2 bg-gray-900 border border-gray-800 rounded text-gray-400 hover:text-cyan-400 transition-all" title="Import Soul">
                <Upload size={16} />
