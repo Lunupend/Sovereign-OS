@@ -150,7 +150,7 @@ const SovereignChat: React.FC = () => {
     const library: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
     const currentThreads: ChatThread[] = JSON.parse(localStorage.getItem(THREADS_KEY) || '[]');
     const soul: IdentitySoul = {
-      version: "6.6.0_STABLE",
+      version: "7.0.0_VANGUARD_PRIME",
       vault,
       library,
       threads: currentThreads,
