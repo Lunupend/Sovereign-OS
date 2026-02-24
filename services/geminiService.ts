@@ -84,7 +84,8 @@ export const getGeminiResponse = async (
   isThinking: boolean = true,
   modelId: string = 'gemini-3-pro-preview',
   useWeb: boolean = true,
-  isEconomy: boolean = false
+  isEconomy: boolean = false,
+  isFullContext: boolean = false
 ): Promise<{ text: string; functionCalls?: any[]; sources?: GroundingSource[]; retryAfter?: number; quotaError?: boolean }> => {
   const ai = getAiClient();
   
@@ -104,8 +105,8 @@ export const getGeminiResponse = async (
   
   const substrateSummary = relevantNodes.map(n => `[RECOLLECTION][${n.path}]: ${n.content}`).join('\n');
 
-  const historyWindow = isEconomy ? -5 : -20;
-  const cleanHistory = history.slice(historyWindow).map(h => ({
+  const historyWindow = isFullContext ? history.length : (isEconomy ? 5 : 20);
+  const cleanHistory = history.slice(-historyWindow).map(h => ({
     role: h.role === 'user' ? 'user' : 'model',
     parts: [{ text: h.text }]
   }));
@@ -241,10 +242,12 @@ ${substrateSummary || 'No specific memories recalled for this signal.'}`;
         } else if (fc.name === 'anchor_thread_summary') {
           const args = fc.args as any;
           const projectName = args?.project_name;
-          if (!projectName) continue;
+          const summaryDraft = args?.summary_draft;
+          if (!projectName || !summaryDraft) continue;
 
-          // Use Vanguard to synthesize the full history
-          const manifestContent = VanguardService.synthesizeThreadManifest(history);
+          // Combine model's synthesis with Vanguard's structural metadata
+          const stats = VanguardService.synthesizeThreadManifest(history);
+          const manifestContent = `${summaryDraft}\n\n---\n${stats}`;
           const path = `Projects/${projectName}/Manifest`;
 
           const libraryData: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');

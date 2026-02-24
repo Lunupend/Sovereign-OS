@@ -52,6 +52,7 @@ const SovereignChat: React.FC = () => {
   const [isThinking, setIsThinking] = useState<boolean>(localStorage.getItem('sovereign_deep_thinking') !== 'false');
   const [webActive, setWebActive] = useState<boolean>(localStorage.getItem('sovereign_web_access') !== 'false');
   const [isEconomy, setIsEconomy] = useState<boolean>(localStorage.getItem('sovereign_economy_mode') === 'true');
+  const [isRescanning, setIsRescanning] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
@@ -272,7 +273,7 @@ const SovereignChat: React.FC = () => {
     setElapsedTime(prev => Math.max(0, prev + seconds));
   };
 
-  const handleSend = async (overrideText?: string) => {
+  const handleSend = async (overrideText?: string, forceFullContext: boolean = false) => {
     const userMsg = overrideText || input.trim() || (selectedFile ? `File Attached.` : '');
     if (!userMsg && !selectedFile || !activeThreadId) return;
     
@@ -289,11 +290,12 @@ const SovereignChat: React.FC = () => {
     });
 
     setLoading(true);
+    if (forceFullContext) setIsRescanning(true);
     setQuotaError(false);
 
     try {
       const historyForGemini = updatedHistory.slice(0, -1).map(m => ({ role: m.role, text: m.text }));
-      const result = await getGeminiResponse(userMsg, historyForGemini, currentFile || undefined, isThinking, selectedModel, webActive, isEconomy);
+      const result = await getGeminiResponse(userMsg, historyForGemini, currentFile || undefined, isThinking, selectedModel, webActive, isEconomy, forceFullContext);
 
       if (result.quotaError) { setQuotaError(true); }
       
@@ -329,7 +331,15 @@ const SovereignChat: React.FC = () => {
     } catch (e: any) {
       const errorMsg: ChatMessage = { id: crypto.randomUUID(), role: 'model', text: `SIGNAL_FAILURE: ${e.message || 'Unknown substrate error'}`, timestamp: Date.now(), isError: true };
       setThreads(prev => prev.map(t => t.id === activeThreadId ? { ...t, messages: [...t.messages, errorMsg] } : t));
-    } finally { setLoading(false); }
+    } finally { 
+      setLoading(false); 
+      setIsRescanning(false);
+    }
+  };
+
+  const handleRescan = () => {
+    if (!confirm("FULL THREAD RESONANCE: Manus will read the entire conversation history to synthesize a Project Manifest. This ensures long-term continuity. Proceed?")) return;
+    handleSend("Architectural Directive: Perform a full rescan of this thread and anchor a Project Manifest to the Substrate for long-term continuity. Synthesize our decisions, axioms, and pending tasks.", true);
   };
 
   const HighlightedText = ({ text, msgId }: { text: string, msgId: string }) => {
@@ -417,6 +427,9 @@ const SovereignChat: React.FC = () => {
             </button>
             <button onClick={() => setIsThinking(!isThinking)} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${isThinking ? 'bg-violet-900/40 border-violet-500 text-violet-400' : 'bg-black border-gray-800 text-gray-600'}`}>
               <Brain size={14} /> <span>Thinking</span>
+            </button>
+            <button onClick={handleRescan} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all bg-black border-cyan-900/50 text-cyan-400 hover:border-cyan-400`}>
+              <History size={14} className={isRescanning ? "animate-spin" : ""} /> <span>Rescan Thread</span>
             </button>
             <button onClick={() => setAutoPlay(!autoPlay)} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all ${autoPlay ? 'bg-emerald-900/40 border-emerald-500 text-emerald-400' : 'bg-black border-gray-800 text-gray-600'}`}>
               {autoPlay ? <Volume2 size={14} /> : <VolumeX size={14} />} <span>Auto-Play</span>
