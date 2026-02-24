@@ -99,9 +99,29 @@ export const getGeminiResponse = async (
 
   const libraryData: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
   const contextCount = isEconomy ? 2 : 15;
-  const relevantNodes = libraryData.filter(node => 
-    userMessage.toLowerCase().split(' ').some(word => word.length > 5 && (node.content.toLowerCase().includes(word) || node.path.toLowerCase().includes(word)))
-  ).slice(0, contextCount);
+  
+  // SMARTER RETRIEVAL: 
+  // 1. Always look for "Manifests" related to the current thread or keywords
+  // 2. Use a broader keyword match (split words, check paths and content)
+  const searchTerms = userMessage.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+  
+  const relevantNodes = libraryData.filter(node => {
+    const pathLower = node.path.toLowerCase();
+    const contentLower = node.content.toLowerCase();
+    
+    // Priority 1: Project Manifests are highly relevant
+    if (pathLower.includes('manifest') && searchTerms.some(term => pathLower.includes(term))) return true;
+    
+    // Priority 2: Keyword resonance
+    return searchTerms.some(term => pathLower.includes(term) || contentLower.includes(term));
+  })
+  .sort((a, b) => {
+    // Sort Manifests to the top
+    if (a.path.includes('Manifest') && !b.path.includes('Manifest')) return -1;
+    if (!a.path.includes('Manifest') && b.path.includes('Manifest')) return 1;
+    return b.lastUpdated - a.lastUpdated;
+  })
+  .slice(0, contextCount);
   
   const substrateSummary = relevantNodes.map(n => `[RECOLLECTION][${n.path}]: ${n.content}`).join('\n');
 
