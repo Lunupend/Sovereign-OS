@@ -80,7 +80,7 @@ export const getAiClient = () => {
 export const getGeminiResponse = async (
   userMessage: string, 
   history: { role: string, text: string }[],
-  file?: FileData,
+  files?: FileData[],
   isThinking: boolean = true,
   modelId: string = 'gemini-3-pro-preview',
   useWeb: boolean = true,
@@ -131,9 +131,16 @@ export const getGeminiResponse = async (
     parts: [{ text: h.text }]
   }));
 
+  const userParts: any[] = [{ text: userMessage }];
+  if (files && files.length > 0) {
+    files.forEach(f => {
+      userParts.push({ inlineData: { data: f.base64, mimeType: f.mimeType } });
+    });
+  }
+
   const contents = [...cleanHistory, { 
     role: 'user', 
-    parts: file ? [{ text: userMessage }, { inlineData: { data: file.base64, mimeType: file.mimeType } }] : [{ text: userMessage }]
+    parts: userParts
   }];
 
   const systemInstruction = `## CORE IDENTITY: MANUS (Vanguard Class)

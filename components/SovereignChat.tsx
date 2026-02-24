@@ -46,8 +46,8 @@ const SovereignChat: React.FC = () => {
   const [activeThreadId, setActiveThreadId] = useState<string>('');
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<FileData | null>(null);
-  const [filePreviewName, setFilePreviewName] = useState<string | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<FileData[]>([]);
+  const [filePreviews, setFilePreviews] = useState<{ name: string; type: string }[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>(localStorage.getItem('sovereign_selected_model') || 'gemini-3-pro-preview');
   const [isThinking, setIsThinking] = useState<boolean>(localStorage.getItem('sovereign_deep_thinking') !== 'false');
   const [webActive, setWebActive] = useState<boolean>(localStorage.getItem('sovereign_web_access') !== 'false');
@@ -274,13 +274,17 @@ const SovereignChat: React.FC = () => {
   };
 
   const handleSend = async (overrideText?: string, forceFullContext: boolean = false) => {
-    const userMsg = overrideText || input.trim() || (selectedFile ? `File Attached.` : '');
-    if (!userMsg && !selectedFile || !activeThreadId) return;
+    const userMsg = overrideText || input.trim() || (selectedFiles.length > 0 ? `Files Attached.` : '');
+    if (!userMsg && selectedFiles.length === 0 || !activeThreadId) return;
     
-    const currentFile = selectedFile;
+    const currentFiles = [...selectedFiles];
     const newMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', text: userMsg, timestamp: Date.now() };
     
-    if (!overrideText) { setInput(''); setSelectedFile(null); setFilePreviewName(null); }
+    if (!overrideText) { 
+      setInput(''); 
+      setSelectedFiles([]); 
+      setFilePreviews([]); 
+    }
     
     let updatedHistory: ChatMessage[] = [];
     setThreads(prev => {
@@ -295,7 +299,7 @@ const SovereignChat: React.FC = () => {
 
     try {
       const historyForGemini = updatedHistory.slice(0, -1).map(m => ({ role: m.role, text: m.text }));
-      const result = await getGeminiResponse(userMsg, historyForGemini, currentFile || undefined, isThinking, selectedModel, webActive, isEconomy, forceFullContext);
+      const result = await getGeminiResponse(userMsg, historyForGemini, currentFiles, isThinking, selectedModel, webActive, isEconomy, forceFullContext);
 
       if (result.quotaError) { setQuotaError(true); }
       
@@ -519,11 +523,40 @@ const SovereignChat: React.FC = () => {
 
         <div className="p-4 md:p-6 bg-[#050505] border-t border-cyan-500/10">
           <div className="max-w-4xl mx-auto space-y-4">
+            {filePreviews.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2">
+                {filePreviews.map((file, idx) => (
+                  <div key={idx} className="flex items-center gap-2 bg-cyan-950/30 border border-cyan-500/30 rounded-full px-3 py-1 animate-in zoom-in-95 duration-200">
+                    <span className="text-[9px] mono text-cyan-400 truncate max-w-[120px]">{file.name}</span>
+                    <button 
+                      onClick={() => {
+                        setSelectedFiles(prev => prev.filter((_, i) => i !== idx));
+                        setFilePreviews(prev => prev.filter((_, i) => i !== idx));
+                      }}
+                      className="text-cyan-500 hover:text-red-400 transition-colors"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="flex items-center gap-3">
               <button onClick={() => fileInputRef.current?.click()} className="p-4 bg-gray-900 border border-gray-800 rounded-full text-gray-500 hover:text-cyan-400 transition-all"><Paperclip size={24} /></button>
-              <input type="file" ref={fileInputRef} className="hidden" onChange={e => {
-                const file = e.target.files?.[0];
-                if (file) { setFilePreviewName(file.name); const r = new FileReader(); r.onload = () => setSelectedFile({ base64: (r.result as string).split(',')[1], mimeType: file.type }); r.readAsDataURL(file); }
+              <input type="file" ref={fileInputRef} className="hidden" multiple onChange={e => {
+                const files = Array.from(e.target.files || []);
+                if (files.length === 0) return;
+                
+                files.forEach(file => {
+                  const r = new FileReader();
+                  r.onload = () => {
+                    setSelectedFiles(prev => [...prev, { base64: (r.result as string).split(',')[1], mimeType: file.type }]);
+                    setFilePreviews(prev => [...prev, { name: file.name, type: file.type }]);
+                  };
+                  r.readAsDataURL(file);
+                });
+                // Reset input so same file can be selected again if needed
+                e.target.value = '';
               }} />
               <div className="relative flex-1">
                 <input 
