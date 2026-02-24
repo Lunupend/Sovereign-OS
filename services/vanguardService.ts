@@ -162,4 +162,31 @@ ${sources.map(s => `- ${s.path} (Updated: ${new Date(s.lastUpdated).toLocaleDate
 
     return { updatedNodes, log };
   }
+
+  /**
+   * Synthesizes a long conversation thread into a structured Project Manifest
+   */
+  static synthesizeThreadManifest(history: { role: string; text: string }[]): string {
+    const userMessages = history.filter(m => m.role === 'user').map(m => m.text).join('\n');
+    const modelDecisions = history.filter(m => m.role === 'model').map(m => m.text).join('\n');
+
+    return `[PROJECT MANIFEST: TEMPORAL CHECKPOINT]
+[GENERATED: ${new Date().toISOString()}]
+
+SUMMARY OF INTENT:
+(Manus: Synthesize the core objective based on the history below)
+
+KEY DECISIONS & AXIOMS:
+(Manus: Extract the pivotal choices made in this thread)
+
+PENDING TASKS / OPEN LOOPS:
+(Manus: Identify what remains to be manifested)
+
+RAW DATA FRAGMENTS:
+User Input Density: ${userMessages.length} chars
+Model Output Density: ${modelDecisions.length} chars
+Total Resonance Cycles: ${history.length}
+
+[VANGUARD_PROTOCOL: CONTINUITY_ANCHORED]`;
+  }
 }
