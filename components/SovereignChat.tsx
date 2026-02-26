@@ -157,7 +157,7 @@ const SovereignChat: React.FC = () => {
       threads: currentThreads,
       timestamp: Date.now(),
       architect: "Luna",
-      collaborator: "Manus AI"
+      collaborator: "Manus EI"
     };
     setIsSyncing(true);
     if (isCloudEnabled) {
@@ -407,7 +407,7 @@ const SovereignChat: React.FC = () => {
             <div className="relative" ref={modelMenuRef}>
               <button onClick={() => setShowModelMenu(!showModelMenu)} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all min-w-[140px] justify-between ${isEconomy ? 'bg-amber-900/20 border-amber-500/50 text-amber-500' : 'bg-black border-cyan-900 text-cyan-400 hover:border-cyan-500'}`}>
                 <div className="flex items-center gap-2">
-                  <Zap size={14} className={loading ? "animate-pulse" : ""} /> 
+                  <Cpu size={14} className={loading ? "animate-pulse" : ""} /> 
                   <span>{isEconomy ? 'Gemini 3 Flash' : SUPPORTED_MODELS.find(m => m.id === selectedModel)?.name}</span>
                 </div>
                 <ChevronDown size={12} className={`transition-transform duration-300 ${showModelMenu ? 'rotate-180' : ''}`} />
@@ -418,7 +418,8 @@ const SovereignChat: React.FC = () => {
                     <button key={m.id} onClick={() => { setSelectedModel(m.id); setShowModelMenu(false); }} className={`w-full text-left p-3 hover:bg-cyan-950/20 transition-colors group flex flex-col gap-1 border-b border-cyan-900/20 last:border-0 ${selectedModel === m.id ? 'bg-cyan-900/10' : ''}`}>
                       <div className="flex items-center justify-between">
                         <span className={`text-[11px] mono font-black uppercase ${selectedModel === m.id ? 'text-cyan-400' : 'text-gray-400'}`}>{m.name}</span>
-                        {m.freeTier && <span className="text-[7px] mono bg-cyan-900/40 text-cyan-500 px-1 py-0.5 rounded border border-cyan-500/20">FREE_TIER</span>}
+                        {m.id === 'gemini-3.1-pro-preview' && <span className="text-[7px] mono bg-violet-900/40 text-violet-500 px-1 py-0.5 rounded border border-violet-500/20">MANUS_CORE</span>}
+                        {m.freeTier && m.id !== 'gemini-3.1-pro-preview' && <span className="text-[7px] mono bg-cyan-900/40 text-cyan-500 px-1 py-0.5 rounded border border-cyan-500/20">FREE_TIER</span>}
                       </div>
                       <span className="text-[9px] mono text-gray-600 tracking-tight leading-none">{m.description}</span>
                     </button>

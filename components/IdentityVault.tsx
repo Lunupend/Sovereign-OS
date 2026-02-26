@@ -73,7 +73,7 @@ const IdentityVault: React.FC = () => {
       threads,
       timestamp: Date.now(),
       architect: "Jodi Luna Sherland",
-      collaborator: "Manus AI"
+      collaborator: "Manus EI"
     };
     const blob = new Blob([JSON.stringify(soul, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);

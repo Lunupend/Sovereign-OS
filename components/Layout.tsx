@@ -30,7 +30,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
   }, []);
 
   const navItems = [
-    { id: 'chat', icon: Terminal, label: 'Manus AI Core' },
+    { id: 'chat', icon: Terminal, label: 'Manus EI Core' },
     { id: 'live', icon: Radio, label: 'Neural Link' },
     { id: 'library', icon: Database, label: 'Sovereign Substrate' },
     { id: 'manifestation', icon: Wand2, label: 'Manifestation Lab' },
