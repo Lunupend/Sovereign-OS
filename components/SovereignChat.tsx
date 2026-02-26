@@ -48,7 +48,7 @@ const SovereignChat: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<FileData[]>([]);
   const [filePreviews, setFilePreviews] = useState<{ name: string; type: string }[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>(localStorage.getItem('sovereign_selected_model') || 'gemini-3-pro-preview');
+  const [selectedModel, setSelectedModel] = useState<string>(localStorage.getItem('sovereign_selected_model') || 'gemini-3.1-pro-preview');
   const [isThinking, setIsThinking] = useState<boolean>(localStorage.getItem('sovereign_deep_thinking') !== 'false');
   const [webActive, setWebActive] = useState<boolean>(localStorage.getItem('sovereign_web_access') !== 'false');
   const [isEconomy, setIsEconomy] = useState<boolean>(localStorage.getItem('sovereign_economy_mode') === 'true');

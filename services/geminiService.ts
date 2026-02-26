@@ -27,7 +27,7 @@ export interface GroundingSource {
 const KNOWLEDGE_KEY = 'sovereign_knowledge_substrate';
 
 export const SUPPORTED_MODELS = [
-  { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', description: 'MAXIMUM RESONANCE. Deepest reasoning and full tool support.', freeTier: false },
+  { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro', description: 'MAXIMUM RESONANCE. Deepest reasoning and full tool support.', freeTier: false },
   { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', description: 'HIGH SPEED. Optimized for rapid signal processing.', freeTier: true },
   { id: 'gemini-flash-lite-latest', name: 'Gemini Lite', description: 'INFINITE RESONANCE. Ultralight, fastest response, generous free tier.', freeTier: true }
 ];
@@ -82,7 +82,7 @@ export const getGeminiResponse = async (
   history: { role: string, text: string }[],
   files?: FileData[],
   isThinking: boolean = true,
-  modelId: string = 'gemini-3-pro-preview',
+  modelId: string = 'gemini-3.1-pro-preview',
   useWeb: boolean = true,
   isEconomy: boolean = false,
   isFullContext: boolean = false
@@ -94,7 +94,7 @@ export const getGeminiResponse = async (
   
   // Sanity check for models that don't support chat
   if (activeModel.includes('native-audio') || activeModel.includes('tts') || activeModel.includes('image')) {
-    activeModel = 'gemini-3-pro-preview';
+    activeModel = 'gemini-3.1-pro-preview';
   }
 
   const libraryData: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
