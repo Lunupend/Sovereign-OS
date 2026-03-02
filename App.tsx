@@ -10,6 +10,7 @@ import AuthPortal from './components/AuthPortal';
 import { supabase, isCloudEnabled } from './services/supabaseClient';
 import { BridgeService } from './services/bridgeService';
 import { RefreshCw } from 'lucide-react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('chat');
@@ -104,6 +105,7 @@ const App: React.FC = () => {
         )}
         {renderContent()}
       </div>
+      <SpeedInsights />
     </Layout>
   );
 };
