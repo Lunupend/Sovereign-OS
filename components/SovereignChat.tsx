@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, AlertTriangle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, Clock, ShieldCheck, HardDrive, Layers, List, Cloud, ChevronDown, BatteryLow, Gauge, ZapOff, Link, SignalHigh, Play, Pause, SkipBack, SkipForward, VolumeX } from 'lucide-react';
 import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS } from '../services/geminiService';
+import { MemoryRetrievalPanel } from './MemoryRetrievalPanel';
 import { ChatThread, ChatMessage, PersistenceLog, IdentitySoul, KnowledgeNode } from '../types';
 import { BridgeService } from '../services/bridgeService';
 import { isCloudEnabled } from '../services/supabaseClient';
@@ -58,6 +59,15 @@ const SovereignChat: React.FC = () => {
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [quotaError, setQuotaError] = useState(false);
+  const [resonanceState, setResonanceState] = useState<{
+    isActive: boolean;
+    results: any[];
+    meta: any;
+  }>({
+    isActive: false,
+    results: [],
+    meta: null
+  });
   const [neuralAnchoring, setNeuralAnchoring] = useState<string | null>(null);
 
   // TTS State
@@ -312,6 +322,13 @@ const SovereignChat: React.FC = () => {
             anchorsPerformed++;
             setNeuralAnchoring(fc.args.path);
             setTimeout(() => setNeuralAnchoring(null), 3000);
+          } else if (fc.name === 'search_substrate') {
+            // Capture search results for the UI
+            setResonanceState({
+              isActive: true,
+              results: (fc as any).response?.results || [],
+              meta: (fc as any).response?.meta || null
+            });
           }
         }
       }
@@ -468,6 +485,22 @@ const SovereignChat: React.FC = () => {
               <p className="text-[11px] mono text-amber-200/70 leading-relaxed uppercase">Update Neural Key or switch to a Free Tier model to continue resonance.</p>
             </div>
           )}
+
+          {resonanceState.isActive && (
+            <div className="max-w-4xl mx-auto">
+              <MemoryRetrievalPanel
+                isActive={resonanceState.isActive}
+                results={resonanceState.results}
+                meta={resonanceState.meta}
+                onClose={() => setResonanceState(prev => ({ ...prev, isActive: false }))}
+                onRequestRescan={() => {
+                  handleRescan();
+                  setResonanceState(prev => ({ ...prev, isActive: false }));
+                }}
+              />
+            </div>
+          )}
+
           {messages.length === 0 && (
              <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-30 mt-20">
                 <ShieldCheck size={48} className="text-gray-800" /><p className="mono text-[10px] uppercase tracking-widest">Awaiting Neural Signal...</p>

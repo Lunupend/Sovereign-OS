@@ -3,6 +3,7 @@ import { GoogleGenAI, Modality, FunctionDeclaration, Type, GenerateContentRespon
 import { KnowledgeNode, PersistenceLog } from "../types";
 import { BridgeService } from "./bridgeService";
 import { VanguardService } from "./vanguardService";
+import { supabase, isCloudEnabled } from "./supabaseClient";
 
 export interface FileData {
   base64: string;
@@ -70,6 +71,223 @@ const anchorThreadSummaryDeclaration: FunctionDeclaration = {
     required: ['project_name', 'summary_draft']
   },
 };
+
+const searchSubstrateDeclaration: FunctionDeclaration = {
+  name: 'search_substrate',
+  parameters: {
+    type: Type.OBJECT,
+    description: 'RESONANCE SEARCH: Queries the Knowledge Substrate for specific memories, axioms, or project manifests. Use this when you need to recall details from previous sessions or cross-reference current signals with anchored wisdom.',
+    properties: {
+      query: { type: Type.STRING, description: 'The search query (e.g. "What are the core axioms?" or "Project Manifest for Manus_Refactor").' },
+      path_hint: { type: Type.STRING, description: 'Optional path prefix to narrow the search (e.g. "Projects/" or "Identity/").' },
+      memory_types: { 
+        type: Type.ARRAY, 
+        items: { type: Type.STRING }, 
+        description: 'Optional list of memory types to prioritize (e.g. ["manifest", "axiom"]).' 
+      },
+      max_results: { type: Type.NUMBER, description: 'Maximum number of nodes to retrieve (default 5).' },
+      use_semantic: { type: Type.BOOLEAN, description: 'Whether to use semantic vector search (default true).' }
+    },
+    required: ['query']
+  },
+};
+
+export interface SearchSubstrateArgs {
+  query: string;
+  path_hint?: string;
+  memory_types?: ('manifest' | 'axiom' | 'recent' | 'phonetic' | 'project' | 'identity')[];
+  max_results?: number;
+  use_semantic?: boolean;
+}
+
+export const handleSearchSubstrate = async (
+  args: SearchSubstrateArgs,
+  userId: string
+): Promise<{ success: boolean; results: any[]; meta: any }> => {
+  const { query, path_hint, memory_types = ['manifest', 'axiom', 'recent'], max_results = 5, use_semantic = true } = args;
+  
+  let results: any[] = [];
+  let searchMethod = 'unknown';
+  let fallbackUsed = false;
+
+  // ATTEMPT 1: Vector Semantic Search (if pgvector available)
+  if (use_semantic && isCloudEnabled && await checkVectorExtension()) {
+    try {
+      const queryEmbedding = await generateEmbedding(query);
+      
+      const { data: vectorResults, error: vectorError } = await supabase.rpc(
+        'search_substrate_vectors',
+        {
+          query_embedding: queryEmbedding,
+          user_uuid: userId,
+          match_threshold: 0.7,
+          match_count: max_results * 2,
+          path_filter: path_hint || null
+        }
+      );
+
+      if (!vectorError && vectorResults && vectorResults.length > 0) {
+        results = vectorResults;
+        searchMethod = 'vector_semantic';
+      } else {
+        fallbackUsed = true;
+      }
+    } catch (e) {
+      console.warn('Vector search failed, falling back to keyword:', e);
+      fallbackUsed = true;
+    }
+  }
+
+  // ATTEMPT 2: Advanced Keyword Tokenization (Fallback)
+  if (results.length === 0) {
+    const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by']);
+    const tokens = query
+      .toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter(t => t.length > 3 && !stopWords.has(t));
+    
+    // Fallback to local search if cloud is not enabled
+    if (!isCloudEnabled) {
+      const libraryData: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
+      results = libraryData.filter(node => {
+        const contentMatch = tokens.some(t => node.content.toLowerCase().includes(t));
+        const pathMatch = path_hint ? node.path.toLowerCase().startsWith(path_hint.toLowerCase()) : true;
+        return contentMatch && pathMatch;
+      }).slice(0, max_results);
+      searchMethod = 'local_keyword';
+    } else {
+      const orConditions = tokens.length > 0 
+        ? tokens.map(token => `content.ilike.%${token}%`).join(',')
+        : `content.ilike.%${query}%`;
+      
+      let dbQuery = supabase
+        .from('knowledge_nodes')
+        .select('*')
+        .eq('user_id', userId)
+        .or(orConditions);
+      
+      if (path_hint) {
+        dbQuery = dbQuery.filter('path', 'ilike', `${path_hint}%`);
+      }
+
+      const { data: keywordResults, error: keywordError } = await dbQuery
+        .order('last_updated', { ascending: false })
+        .limit(max_results * 3);
+
+      if (!keywordError && keywordResults) {
+        results = keywordResults
+          .map((node: any) => {
+            const typeScore = memory_types.findIndex(t => node.path.toLowerCase().includes(t)) ?? 99;
+            const recencyScore = new Date(node.last_updated).getTime();
+            return { ...node, _score: typeScore * 1000000000000 - recencyScore };
+          })
+          .sort((a: any, b: any) => a._score - b._score)
+          .slice(0, max_results);
+        
+        searchMethod = fallbackUsed ? 'keyword_fallback' : 'keyword_primary';
+      }
+    }
+  }
+
+  // THE VETO/FAIL STATE: Explicit zero-result handling
+  if (results.length === 0) {
+    if (isCloudEnabled) {
+      await supabase.from('memory_gaps').insert({
+        user_id: userId,
+        query,
+        path_hint,
+        attempted_methods: [searchMethod, fallbackUsed ? 'keyword_fallback' : null].filter(Boolean),
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    return {
+      success: false,
+      results: [],
+      meta: {
+        query,
+        search_method: searchMethod,
+        fallback_used: fallbackUsed,
+        veto_state: 'MEMORY_GAP_DETECTED',
+        directive_7_invocation: 'Task the Architect: The Substrate lacks signal for this query. Manual intervention or new anchoring required.',
+        tokens_searched: query.toLowerCase().split(/\s+/).filter(t => t.length > 3)
+      }
+    };
+  }
+
+  // Update retrieval metrics for successful searches
+  if (isCloudEnabled) {
+    for (const node of results) {
+      await supabase
+        .from('knowledge_nodes')
+        .update({ 
+          retrieval_count: (node.retrieval_count || 0) + 1,
+          last_retrieved: new Date().toISOString()
+        })
+        .eq('id', node.id);
+    }
+
+    await supabase.from('resonance_logs').insert({
+      user_id: userId,
+      query,
+      results_count: results.length,
+      search_method: searchMethod,
+      fallback_used: fallbackUsed,
+      top_result_path: results[0]?.path,
+      trigger_source: 'manus_initiated'
+    });
+  }
+
+  return {
+    success: true,
+    results: results.map(node => ({
+      id: node.id,
+      path: node.path,
+      content_preview: node.content.substring(0, 800) + (node.content.length > 800 ? '... [truncated]' : ''),
+      full_content: node.content,
+      tags: node.tags,
+      last_updated: node.last_updated || node.lastUpdated,
+      retrieval_count: (node.retrieval_count || 0) + 1,
+      relevance_score: node._score || 'calculated'
+    })),
+    meta: {
+      query,
+      results_found: results.length,
+      search_method: searchMethod,
+      fallback_used: fallbackUsed,
+      memory_types_prioritized: memory_types,
+      veto_state: null
+    }
+  };
+};
+
+async function checkVectorExtension(): Promise<boolean> {
+  if (!isCloudEnabled) return false;
+  try {
+    const { data } = await supabase.rpc('check_vector_extension');
+    return data === true;
+  } catch {
+    return false;
+  }
+}
+
+async function generateEmbedding(text: string): Promise<number[]> {
+  try {
+    const ai = getAiClient();
+    // Use Gemini's embedding API
+    const result = await ai.models.embedContent({
+      model: 'text-embedding-004',
+      contents: [{ parts: [{ text }] }]
+    });
+    const values = result.embeddings?.[0]?.values;
+    if (!values) throw new Error("No embedding values returned");
+    return values;
+  } catch {
+    // Fallback: simple character code vector (not semantic but functional)
+    return text.split('').map((c, i) => c.charCodeAt(0) / 255).slice(0, 768);
+  }
+}
 
 export const getAiClient = () => {
   const apiKey = process.env.API_KEY;
@@ -178,7 +396,7 @@ ${substrateSummary || 'No specific memories recalled for this signal.'}`;
   if (useWeb) {
     tools = [{ googleSearch: {} }];
   } else {
-    tools = [{ functionDeclarations: [upsertKnowledgeNodeDeclaration, deleteKnowledgeNodeDeclaration, anchorThreadSummaryDeclaration] }];
+    tools = [{ functionDeclarations: [upsertKnowledgeNodeDeclaration, deleteKnowledgeNodeDeclaration, anchorThreadSummaryDeclaration, searchSubstrateDeclaration] }];
   }
 
   const config: any = {
@@ -221,11 +439,11 @@ ${substrateSummary || 'No specific memories recalled for this signal.'}`;
         break;
       }
 
-      allFunctionCalls.push(...functionCalls);
-
       // Handle function calls
       const functionResponses = [];
       for (const fc of functionCalls) {
+        let toolResult: any = null;
+        
         if (fc.name === 'upsert_knowledge_node') {
           const args = fc.args as any;
           const path = args?.path;
@@ -234,7 +452,6 @@ ${substrateSummary || 'No specific memories recalled for this signal.'}`;
           
           if (!path || !content) continue;
 
-          // Execute the tool
           const libraryData: KnowledgeNode[] = JSON.parse(localStorage.getItem(KNOWLEDGE_KEY) || '[]');
           const newNode: KnowledgeNode = { 
             id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(7), 
@@ -248,11 +465,7 @@ ${substrateSummary || 'No specific memories recalled for this signal.'}`;
           else libraryData.push(newNode);
           localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(libraryData));
           
-          functionResponses.push({
-            name: fc.name,
-            response: { content: "Success: Knowledge anchored to substrate." },
-            id: fc.id
-          });
+          toolResult = { content: "Success: Knowledge anchored to substrate." };
         } else if (fc.name === 'delete_knowledge_node') {
           const args = fc.args as any;
           const path = args?.path;
@@ -262,18 +475,13 @@ ${substrateSummary || 'No specific memories recalled for this signal.'}`;
           const filteredData = libraryData.filter(n => n.path !== path);
           localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(filteredData));
 
-          functionResponses.push({
-            name: fc.name,
-            response: { content: `Success: Node at ${path} purged from substrate.` },
-            id: fc.id
-          });
+          toolResult = { content: `Success: Node at ${path} purged from substrate.` };
         } else if (fc.name === 'anchor_thread_summary') {
           const args = fc.args as any;
           const projectName = args?.project_name;
           const summaryDraft = args?.summary_draft;
           if (!projectName || !summaryDraft) continue;
 
-          // Combine model's synthesis with Vanguard's structural metadata
           const stats = VanguardService.synthesizeThreadManifest(history);
           const manifestContent = `${summaryDraft}\n\n---\n${stats}`;
           const path = `Projects/${projectName}/Manifest`;
@@ -293,13 +501,27 @@ ${substrateSummary || 'No specific memories recalled for this signal.'}`;
           
           localStorage.setItem(KNOWLEDGE_KEY, JSON.stringify(libraryData));
 
+          toolResult = { content: `Success: Thread synthesized and anchored to ${path}. Continuity preserved.` };
+        } else if (fc.name === 'search_substrate') {
+          const args = fc.args as any;
+          const { data: { user } } = await supabase.auth.getUser();
+          const userId = user?.id || 'anonymous';
+          
+          toolResult = await handleSearchSubstrate(args, userId);
+        }
+
+        if (toolResult) {
+          // Attach response to the function call object for the UI
+          (fc as any).response = toolResult;
           functionResponses.push({
             name: fc.name,
-            response: { content: `Success: Thread synthesized and anchored to ${path}. Continuity preserved.` },
+            response: toolResult,
             id: fc.id
           });
         }
       }
+
+      allFunctionCalls.push(...functionCalls);
 
       if (functionResponses.length > 0 && response.candidates?.[0]?.content) {
         // Add the model's turn (the function calls)
