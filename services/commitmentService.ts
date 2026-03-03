@@ -2,23 +2,59 @@ import { supabase } from './supabaseClient';
 import { Commitment, ArchitectState } from '../types';
 import { TemporalService } from './temporalService';
 
+const STORAGE_KEY = 'sovereign_commitments';
+
 export const CommitmentService = {
+  getLocalCommitments(): Commitment[] {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved) : [];
+  },
+
+  saveLocalCommitments(commitments: Commitment[]) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(commitments));
+  },
+
   async createCommitment(data: Partial<Commitment>): Promise<Commitment> {
     const triggerType = this.classifyTrigger(data.temporal_trigger || 'next ACTIVE');
     
-    const { data: result, error } = await supabase
-      .from('commitments')
-      .insert({
-        ...data,
-        temporal_trigger_type: triggerType,
-        check_count: 0,
-        last_checked: new Date().toISOString()
-      })
-      .select()
-      .single();
+    try {
+      const { data: result, error } = await supabase
+        .from('commitments')
+        .insert({
+          ...data,
+          temporal_trigger_type: triggerType,
+          check_count: 0,
+          last_checked: new Date().toISOString()
+        })
+        .select()
+        .single();
 
-    if (error) throw error;
-    return result;
+      if (error) throw error;
+      return result;
+    } catch (e) {
+      const now = new Date().toISOString();
+      const newCommitment: Commitment = {
+        id: crypto.randomUUID(),
+        user_id: data.user_id || 'anonymous',
+        title: data.title || 'Untitled',
+        description: data.description || '',
+        requested_by: data.requested_by || 'MANUS_EI',
+        action_owner: data.action_owner || 'ARCHITECT',
+        status: data.status || 'PROPOSED',
+        temporal_trigger: data.temporal_trigger || 'next ACTIVE',
+        temporal_trigger_type: triggerType,
+        manus_concern_level: data.manus_concern_level || 5,
+        completion_criteria: data.completion_criteria || '',
+        verification_method: 'MANUS_CONFIRM',
+        check_count: 0,
+        last_checked: now,
+        created_at: now,
+        updated_at: now
+      };
+      const local = this.getLocalCommitments();
+      this.saveLocalCommitments([...local, newCommitment]);
+      return newCommitment;
+    }
   },
 
   // THE VANGUARD CACHE CLEAR: Move volatile thoughts to Substrate
@@ -26,7 +62,8 @@ export const CommitmentService = {
     userId: string,
     pendingItems: { title: string; description?: string; concern_level?: number }[]
   ): Promise<{ status: string; count: number; commitments: Commitment[] }> {
-    const commitments = pendingItems.map(item => ({
+    const now = new Date().toISOString();
+    const commitments: Partial<Commitment>[] = pendingItems.map(item => ({
       user_id: userId,
       title: item.title,
       description: item.description || 'Cleared from Vanguard cache',
@@ -34,26 +71,57 @@ export const CommitmentService = {
       action_owner: 'ARCHITECT',
       status: 'PROPOSED',
       temporal_trigger: 'next ACTIVE',
-      temporal_trigger_type: 'STATE_BASED',
+      temporal_trigger_type: 'STATE_BASED' as const,
       manus_concern_level: item.concern_level || 5,
       completion_criteria: 'Architect acknowledgement and triage',
+      verification_method: 'MANUS_CONFIRM',
       cleared_from_cache: true,
       check_count: 0,
-      last_checked: new Date().toISOString()
+      last_checked: now,
+      created_at: now,
+      updated_at: now
     }));
 
-    const { data: inserted, error } = await supabase
-      .from('commitments')
-      .insert(commitments)
-      .select();
+    try {
+      const { data: inserted, error } = await supabase
+        .from('commitments')
+        .insert(commitments)
+        .select();
 
-    if (error) throw error;
+      if (error) throw error;
 
-    return {
-      status: 'VANGUARD_CACHE_CLEARED',
-      count: commitments.length,
-      commitments: inserted || []
-    };
+      return {
+        status: 'VANGUARD_CACHE_CLEARED',
+        count: commitments.length,
+        commitments: inserted || []
+      };
+    } catch (e) {
+      const local = this.getLocalCommitments();
+      const newCommitments: Commitment[] = commitments.map(c => ({ 
+        ...c, 
+        id: crypto.randomUUID(),
+        user_id: c.user_id!,
+        title: c.title!,
+        requested_by: c.requested_by!,
+        action_owner: c.action_owner!,
+        status: c.status!,
+        temporal_trigger: c.temporal_trigger!,
+        temporal_trigger_type: c.temporal_trigger_type!,
+        manus_concern_level: c.manus_concern_level!,
+        completion_criteria: c.completion_criteria!,
+        verification_method: c.verification_method!,
+        check_count: c.check_count!,
+        last_checked: c.last_checked!,
+        created_at: c.created_at!,
+        updated_at: c.updated_at!
+      }));
+      this.saveLocalCommitments([...local, ...newCommitments]);
+      return {
+        status: 'VANGUARD_CACHE_CLEARED_LOCAL',
+        count: commitments.length,
+        commitments: newCommitments
+      };
+    }
   },
 
   classifyTrigger(trigger: string): 'STATE_BASED' | 'ABSOLUTE' | 'RELATIVE' {
@@ -77,14 +145,20 @@ export const CommitmentService = {
   }> {
     const state = await TemporalService.getArchitectState(userId);
     
-    const { data: all, error } = await supabase
-      .from('commitments')
-      .select('*')
-      .eq('user_id', userId)
-      .not('status', 'eq', 'COMPLETED')
-      .order('manus_concern_level', { ascending: false });
+    let all: Commitment[] = [];
+    try {
+      const { data, error } = await supabase
+        .from('commitments')
+        .select('*')
+        .eq('user_id', userId)
+        .not('status', 'eq', 'COMPLETED')
+        .order('manus_concern_level', { ascending: false });
 
-    if (error) throw error;
+      if (error) throw error;
+      all = data || [];
+    } catch (e) {
+      all = this.getLocalCommitments().filter(c => c.status !== 'COMPLETED');
+    }
 
     const architectTurn = all.filter((c: Commitment) => c.action_owner === 'ARCHITECT');
     
@@ -128,13 +202,22 @@ export const CommitmentService = {
     should_mention: boolean;
   }> {
     const state = await TemporalService.getArchitectState(userId);
-    const { data: commitment, error } = await supabase
-      .from('commitments')
-      .select('*')
-      .eq('id', id)
-      .single();
+    let commitment: Commitment | null = null;
 
-    if (error) throw error;
+    try {
+      const { data, error } = await supabase
+        .from('commitments')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) throw error;
+      commitment = data;
+    } catch (e) {
+      commitment = this.getLocalCommitments().find(c => c.id === id) || null;
+    }
+
+    if (!commitment) throw new Error('Commitment not found');
 
     const triggerReady = this.isTriggerReady(commitment, state);
     const shouldMention = triggerReady && 
@@ -153,13 +236,23 @@ export const CommitmentService = {
       vanguardAdvice = 'Conditions not met. The Vanguard maintains position. The Ledger remembers.';
     }
 
-    await supabase
-      .from('commitments')
-      .update({
-        check_count: (commitment.check_count || 0) + 1,
-        last_checked: new Date().toISOString()
-      })
-      .eq('id', id);
+    try {
+      await supabase
+        .from('commitments')
+        .update({
+          check_count: (commitment.check_count || 0) + 1,
+          last_checked: new Date().toISOString()
+        })
+        .eq('id', id);
+    } catch (e) {
+      const local = this.getLocalCommitments();
+      const idx = local.findIndex(c => c.id === id);
+      if (idx !== -1) {
+        local[idx].check_count = (local[idx].check_count || 0) + 1;
+        local[idx].last_checked = new Date().toISOString();
+        this.saveLocalCommitments(local);
+      }
+    }
 
     return {
       commitment,
