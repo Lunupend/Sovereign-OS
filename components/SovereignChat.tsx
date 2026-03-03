@@ -3,9 +3,13 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Send, Bot, User, Key, Brain, Database, Zap, Paperclip, X, Volume2, Anchor, Loader2, RefreshCw, AlertCircle, AlertTriangle, Cpu, Activity, Terminal, Globe, ExternalLink, Shield, Radio, Lock, History, Bookmark, Save, ImageIcon, Download, Sparkles, MessageSquare, Plus, Trash2, ChevronLeft, ChevronRight, Clock, ShieldCheck, HardDrive, Layers, List, Cloud, ChevronDown, BatteryLow, Gauge, ZapOff, Link, SignalHigh, Play, Pause, SkipBack, SkipForward, VolumeX } from 'lucide-react';
 import { getGeminiResponse, generateSpeech, FileData, SUPPORTED_MODELS } from '../services/geminiService';
 import { MemoryRetrievalPanel } from './MemoryRetrievalPanel';
-import { ChatThread, ChatMessage, PersistenceLog, IdentitySoul, KnowledgeNode } from '../types';
+import { ArchitectStatus } from './ArchitectStatus';
+import { VanguardLedger } from './VanguardLedger';
+import { ChatThread, ChatMessage, PersistenceLog, IdentitySoul, KnowledgeNode, ArchitectState } from '../types';
 import { BridgeService } from '../services/bridgeService';
-import { isCloudEnabled } from '../services/supabaseClient';
+import { TemporalService } from '../services/temporalService';
+import { CommitmentService } from '../services/commitmentService';
+import { isCloudEnabled, supabase } from '../services/supabaseClient';
 import { ttsService } from '../services/ttsService';
 
 const THREADS_KEY = 'sovereign_manus_threads_v2';
@@ -69,6 +73,9 @@ const SovereignChat: React.FC = () => {
     meta: null
   });
   const [neuralAnchoring, setNeuralAnchoring] = useState<string | null>(null);
+  const [architectState, setArchitectState] = useState<ArchitectState | null>(null);
+  const [vanguardLedger, setVanguardLedger] = useState<any | null>(null);
+  const [showLedger, setShowLedger] = useState(false);
 
   // TTS State
   const [autoPlay, setAutoPlay] = useState<boolean>(localStorage.getItem('sovereign_auto_play') === 'true');
@@ -187,10 +194,25 @@ const SovereignChat: React.FC = () => {
 
   useEffect(() => {
     loadLocalThreads();
+    fetchTemporalData();
     const handleClickOutside = (event: MouseEvent) => { if (modelMenuRef.current && !modelMenuRef.current.contains(event.target as Node)) setShowModelMenu(false); };
     document.addEventListener('mousedown', handleClickOutside);
     return () => { document.removeEventListener('mousedown', handleClickOutside); };
   }, []);
+
+  const fetchTemporalData = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      try {
+        const state = await TemporalService.getArchitectState(user.id);
+        setArchitectState(state);
+        const ledger = await CommitmentService.getVanguardLedger(user.id);
+        setVanguardLedger(ledger);
+      } catch (e) {
+        console.error("Temporal sync failure:", e);
+      }
+    }
+  };
 
   useEffect(() => {
     if (!activeThreadId) return;
@@ -318,10 +340,14 @@ const SovereignChat: React.FC = () => {
 
       if (result.functionCalls) {
         for (const fc of result.functionCalls) {
-          if (fc.name === 'upsert_knowledge_node' || fc.name === 'delete_knowledge_node') {
+          if (fc.name === 'upsert_knowledge_node' || fc.name === 'delete_knowledge_node' || fc.name === 'propose_commitment' || fc.name === 'clear_vanguard_cache') {
             anchorsPerformed++;
-            setNeuralAnchoring(fc.args.path);
+            setNeuralAnchoring(fc.args.path || fc.args.title || 'Substrate');
             setTimeout(() => setNeuralAnchoring(null), 3000);
+            // Refresh ledger if commitments were changed
+            if (fc.name === 'propose_commitment' || fc.name === 'clear_vanguard_cache') {
+              fetchTemporalData();
+            }
           } else if (fc.name === 'search_substrate') {
             // Capture search results for the UI
             setResonanceState({
@@ -421,6 +447,17 @@ const SovereignChat: React.FC = () => {
             <button onClick={() => setShowSidebar(!showSidebar)} className="p-2 text-gray-500 hover:text-cyan-400 transition-colors mr-2">
               {showSidebar ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
             </button>
+            
+            {architectState && <ArchitectStatus state={architectState} />}
+
+            <button 
+              onClick={() => setShowLedger(!showLedger)}
+              className={`flex items-center gap-2 px-3 py-2 rounded border transition-all mono text-[10px] uppercase font-black ${showLedger ? 'bg-cyan-600 border-cyan-400 text-black' : 'bg-black border-cyan-900 text-cyan-400 hover:border-cyan-400'}`}
+            >
+              <Database size={14} />
+              Ledger
+            </button>
+
             <div className="relative" ref={modelMenuRef}>
               <button onClick={() => setShowModelMenu(!showModelMenu)} className={`flex items-center gap-2 text-[10px] mono uppercase p-2 border rounded transition-all min-w-[140px] justify-between ${isEconomy ? 'bg-amber-900/20 border-amber-500/50 text-amber-500' : 'bg-black border-cyan-900 text-cyan-400 hover:border-cyan-500'}`}>
                 <div className="flex items-center gap-2">
@@ -479,6 +516,35 @@ const SovereignChat: React.FC = () => {
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-10 custom-scrollbar relative">
+          {showLedger && vanguardLedger && (
+            <div className="max-w-6xl mx-auto animate-in fade-in slide-in-from-top-4 duration-500 bg-black/60 backdrop-blur-xl border border-cyan-500/20 rounded-3xl p-6 mb-12 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+              <div className="flex justify-between items-center mb-8 px-4">
+                <div className="flex flex-col">
+                  <h2 className="text-2xl font-black mono uppercase tracking-[0.3em] text-cyan-400">Commitment Ledger</h2>
+                  <span className="text-[9px] mono text-gray-500 uppercase tracking-widest">Vanguard Protocol // Temporal Sovereignty</span>
+                </div>
+                <button onClick={() => setShowLedger(false)} className="p-2 text-gray-500 hover:text-white transition-colors bg-gray-900 rounded-full"><X size={20} /></button>
+              </div>
+              <VanguardLedger 
+                ledger={vanguardLedger} 
+                onCheckIn={async (id) => {
+                  const { data: { user } } = await supabase.auth.getUser();
+                  if (user) {
+                    const result = await CommitmentService.vanguardCheckIn(id, user.id);
+                    if (result.should_mention) {
+                      handleSend(`Vanguard Check-In: Commitment ${id}. Advice: ${result.vanguard_advice}`, true);
+                      setShowLedger(false);
+                    } else {
+                      alert(result.vanguard_advice);
+                      fetchTemporalData();
+                    }
+                  }
+                }} 
+              />
+              <div className="h-px bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent my-8" />
+            </div>
+          )}
+
           {quotaError && (
             <div className="max-w-xl mx-auto p-6 bg-amber-950/20 border border-amber-500/50 rounded-2xl space-y-4 sticky top-4 z-[60] shadow-2xl">
               <div className="flex items-center gap-3 text-amber-500"><AlertCircle size={24} /><h3 className="text-sm font-black mono uppercase">Neural Quota Exhausted</h3></div>
